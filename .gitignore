@@ -64,3 +64,5 @@ GIT-TAG
 
 # verify-release.sh downloads
 verify/
+# Vita out-of-tree build
+build-vita/

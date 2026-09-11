@@ -1,0 +1,33 @@
+# PS Vita port feasibility notes
+
+## Current architecture decision
+
+The initial target is a standalone VPK. Azahar's existing Qt frontend is not portable to Vita, and
+using its libretro frontend immediately would hide platform failures behind RetroArch.
+
+| Azahar subsystem | Initial Vita choice | Reason |
+| --- | --- | --- |
+| CPU | ARM DynCom interpreter | Existing portable fallback for 32-bit hosts |
+| GPU | Software renderer, then VitaGL | Establish correctness before shader translation |
+| Frontend | Small native Vita shell | Qt is unavailable and too large |
+| Audio | Disabled, then native Vita backend | Avoid blocking loader/CPU bring-up |
+| Networking | Disabled | Not required to boot local software |
+| Filesystem | `ux0:data/azahar-vita` adapter | Gives deterministic writable paths and logs |
+
+## Known hard constraints
+
+- Vita applications are 32-bit ARMv7 while current Azahar's fast Dynarmic path is only compiled for
+  x86-64 and ARM64. The portable interpreter should compile but will be much slower.
+- The Vita has 512 MiB system RAM and 128 MiB VRAM shared under tighter per-process limits than a
+  desktop build. Custom textures, shader caches, telemetry, multiplayer, scripting, debugging, and
+  game dumping must remain disabled.
+- Vita has no native desktop OpenGL or Vulkan implementation. The existing accelerated renderers
+  cannot be linked unchanged.
+- Azahar's dependency graph must be reduced; cross-compiling every desktop dependency is neither a
+  useful nor realistic first milestone.
+
+## Definition of the next milestone
+
+Milestone 1 is complete when a Vita build executes a deterministic group of ARM11 instructions via
+Azahar's DynCom interpreter and records the expected register values in the boot log. It does not
+need to load a commercial game.
