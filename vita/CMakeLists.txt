@@ -18,6 +18,8 @@ get_filename_component(AZAHAR_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
 option(AZAHAR_VITA_PROBE_FORCE_FAILURE "Show and log the hardware probe failure path" OFF)
 option(AZAHAR_VITA_BUILD_HARDWARE_PROBE "Build the milestone 0 hardware probe" OFF)
 option(AZAHAR_VITA_COMMON_FORCE_FAILURE "Show and log the common probe failure path" OFF)
+option(AZAHAR_VITA_BUILD_DYNCOM_PROBE "Build the milestone 2 DynCom probe" OFF)
+option(AZAHAR_VITA_DYNCOM_FORCE_FAILURE "Show and log the DynCom probe failure path" OFF)
 
 set(AZAHAR_VITA_WARNINGS
     -Wall
@@ -83,6 +85,67 @@ target_include_directories(citra_common PUBLIC
 )
 target_link_libraries(citra_common PUBLIC fmt::fmt-header-only)
 target_link_libraries(citra_common PRIVATE pthread)
+
+if(AZAHAR_VITA_BUILD_DYNCOM_PROBE)
+    add_library(citra_dyncom_probe STATIC
+        "${AZAHAR_ROOT}/src/core/arm/dyncom/arm_dyncom_dec.cpp"
+        "${AZAHAR_ROOT}/src/core/arm/dyncom/arm_dyncom_interpreter.cpp"
+        "${AZAHAR_ROOT}/src/core/arm/dyncom/arm_dyncom_thumb.cpp"
+        "${AZAHAR_ROOT}/src/core/arm/dyncom/arm_dyncom_trans.cpp"
+        "${AZAHAR_ROOT}/src/core/arm/skyeye_common/armstate.cpp"
+        "${AZAHAR_ROOT}/src/core/arm/skyeye_common/armsupp.cpp"
+        "${AZAHAR_ROOT}/src/core/arm/skyeye_common/vfp/vfp.cpp"
+        "${AZAHAR_ROOT}/src/core/arm/skyeye_common/vfp/vfpdouble.cpp"
+        "${AZAHAR_ROOT}/src/core/arm/skyeye_common/vfp/vfpsingle.cpp"
+    )
+    target_compile_features(citra_dyncom_probe PUBLIC cxx_std_20)
+    target_compile_definitions(citra_dyncom_probe PUBLIC
+        AZAHAR_VITA=1
+        MICROPROFILE_ENABLED=0
+        TRANS_CACHE_SIZE=2097152
+    )
+    target_compile_options(citra_dyncom_probe PRIVATE
+        -Wall
+        -Os
+        -ffunction-sections
+        -fdata-sections
+    )
+    target_include_directories(citra_dyncom_probe PUBLIC
+        "${AZAHAR_ROOT}/src"
+        "${AZAHAR_ROOT}/externals/boost"
+        "${AZAHAR_ROOT}/externals/microprofile"
+    )
+    target_link_libraries(citra_dyncom_probe PUBLIC citra_common)
+
+    add_executable(azahar_vita_dyncom_probe
+        src/dyncom_corpus.cpp
+        src/dyncom_main.cpp
+    )
+    target_compile_features(azahar_vita_dyncom_probe PRIVATE cxx_std_20)
+    target_compile_options(azahar_vita_dyncom_probe PRIVATE ${AZAHAR_VITA_WARNINGS} -Os)
+    target_link_options(azahar_vita_dyncom_probe PRIVATE
+        "-Wl,--gc-sections,-Map=${CMAKE_CURRENT_BINARY_DIR}/azahar_vita_dyncom_probe.map"
+    )
+    if(AZAHAR_VITA_DYNCOM_FORCE_FAILURE)
+        target_compile_definitions(azahar_vita_dyncom_probe PRIVATE
+            AZAHAR_VITA_DYNCOM_FORCE_FAILURE=1)
+    endif()
+    target_link_libraries(azahar_vita_dyncom_probe PRIVATE
+        citra_dyncom_probe
+        SceCtrl_stub
+        SceDisplay_stub
+        SceIofilemgr_stub
+        SceKernelThreadMgr_stub
+        SceSysmem_stub
+    )
+
+    vita_create_self(eboot.bin azahar_vita_dyncom_probe)
+    vita_create_vpk(azahar_vita_dyncom_probe.vpk AZHV00003 eboot.bin
+        VERSION 00.01
+        NAME "Azahar Vita DynCom Probe"
+    )
+    return()
+endif()
 
 add_executable(azahar_vita_common_probe src/common_main.cpp)
 target_compile_features(azahar_vita_common_probe PRIVATE cxx_std_20)

@@ -10,8 +10,9 @@
 #include <type_traits>
 #include "core/arm/dyncom/arm_dyncom_environment.h"
 #include "core/arm/dyncom/arm_dyncom_interpreter.h"
-#include "core/arm/dyncom/arm_dyncom_trans.h"
 #include "core/arm/skyeye_common/armstate.h"
+
+extern std::size_t trans_cache_buf_top;
 
 namespace Vita::DyncomProbe {
 namespace {
