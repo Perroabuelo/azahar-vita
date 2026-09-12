@@ -1,0 +1,4 @@
+[   0.023739] Core.ARM11 <Info> budget_main.cpp:main:191: memory_probe_version=04.00 platform=vita
+[   0.052017] Core.ARM11 <Info> budget_main.cpp:main:209: PASS logger backend=vita path=ux0:data/azahar-vita/boot.log
+[   0.053174] Core.ARM11 <Error> budget_main.cpp:Fail:170: FAIL forced_failure code=0xA4000001
+[   0.053507] Core.ARM11 <Error> budget_main.cpp:Fail:171: RESULT FAIL
