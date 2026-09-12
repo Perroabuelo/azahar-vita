@@ -268,6 +268,78 @@ then passed three consecutive launches.
 
 This validation was completed on 2026-09-12; the retained evidence is the canonical record.
 
+## Hito 4: memory management and budget
+
+The fifth VPK makes `Memory::MemorySystem`'s four large backing allocations (FCRAM, VRAM, DSP RAM,
+New 3DS extra RAM) pluggable and failable through `Core::MemoryEnvironment::AllocateBackingMemory`/
+`FreeBackingMemory` instead of an unconditional `make_unique<u8[]>`, rather than adding a new
+subsystem: `MemorySystem::IsInitialized()`/`GetFailedItem()` turn what used to be a silent
+newlib-heap exhaustion crash (see Hito 3's finding below) into a reportable failure, and
+`GetAllocatedBytes()`/`GetTotalAllocatedBytes()` expose what each region actually costs. Under
+`AZAHAR_VITA`, New 3DS extra RAM is no longer allocated at all: no Old 3DS-only build's ExHeader
+can ever map it (see `docs/vita-port.md`), so the 4 MiB it used to cost is simply not spent.
+
+The deterministic corpus (`budget_plan`, `region_accounting`, `oom_recovery`,
+`load_release_cycles`, `renderer_headroom`) is shared verbatim with the desktop reference, exactly
+like Hitos 2 and 3; `load_release_cycles` repeats the Hito 3 loader/memory/kernel sequence three
+independent times via `Vita::SystemProbe::RunSystemCycle` (a small refactor of `RunSystemCorpus`
+that changes no Hito 3 behavior or signature) and checks the three runs produce byte-identical
+results. The Vita probe additionally builds one extra, unsigned `Memory::MemorySystem` over a
+`MemblockEnvironment` that gives FCRAM, VRAM and DSP RAM their own named
+`sceKernelAllocMemBlock` allocations - the hardware demonstration of "separate the allocations" -
+logged but kept out of the signed corpus, since the corpus must stay comparable to the desktop
+reference bit for bit and the desktop build has no such thing to compare against.
+
+Build and run the desktop reference first:
+
+```sh
+cmake -S vita/tests -B build-vita/hito4-host -DCMAKE_BUILD_TYPE=Release
+cmake --build build-vita/hito4-host --parallel
+build-vita/hito4-host/azahar_budget_host_probe
+```
+
+Build normal and diagnostic Vita variants in separate directories:
+
+```sh
+cmake -S vita -B build-vita/hito4-cmake -DCMAKE_BUILD_TYPE=Release \
+    -DAZAHAR_VITA_BUILD_BUDGET_PROBE=ON
+cmake --build build-vita/hito4-cmake --parallel
+
+cmake -S vita -B build-vita/hito4-failure -DCMAKE_BUILD_TYPE=Release \
+    -DAZAHAR_VITA_BUILD_BUDGET_PROBE=ON \
+    -DAZAHAR_VITA_BUDGET_FORCE_FAILURE=ON
+cmake --build build-vita/hito4-failure --parallel
+
+vita/scripts/validate-hito4.sh build-vita/hito4-cmake \
+    build-vita/hito4-host/azahar_budget_host_probe
+```
+
+The VPK uses title ID `AZHV00005`, version `00.01`, and title
+`Azahar Vita Memory Probe`.
+
+## Hito 4 physical validation
+
+1. Install `build-vita/hito4-failure/azahar_vita_budget_probe.vpk`. It must show alternating
+   magenta/black bands, log `FAIL forced_failure code=0xA4000001` and `RESULT FAIL`, then exit
+   after five seconds.
+2. Install `build-vita/hito4-cmake/azahar_vita_budget_probe.vpk`. It must show six color bands and
+   remain responsive until **START** is pressed.
+3. Launch the normal probe three times. Every run must contain a `PASS memory_regions` record for
+   the real memblock allocation, five `PASS group=` records (`budget_plan`, `region_accounting`,
+   `oom_recovery`, `load_release_cycles`, `renderer_headroom`) with the same signatures as the
+   desktop reference, a `PASS memory` record with heap/user/CDRAM/phycont figures, and
+   `RESULT PASS groups=5` without any `FAIL` record.
+4. Recover `ux0:data/azahar-vita/boot.log` and retain it with the forced log, desktop output, SDK
+   version, commit, sizes, hashes, and validator output under `build-vita/evidence/hito-4/`.
+
+`_newlib_heap_size_user` moves from Hito 3's 192 MiB to 160 MiB: removing the 4 MiB New 3DS
+allocation only frees 4 MiB by itself, but the corpus's own environments (kept heap-based and
+portable so their results stay comparable to the desktop reference - see the note in
+`budget_main.cpp`) still need close to the full ~134.5 MiB FCRAM+VRAM+DSP figure plus the ~5 MiB
+page table at their peak, so this milestone's reduction is real but modest; a build whose actual
+production system also allocated through the memblock path demonstrated here could go
+considerably lower, and is left as a documented follow-up rather than attempted in this probe.
+
 ## Porting order
 
 1. Compile `citra_common` without networking, desktop dynamic-library loading, or platform-specific
