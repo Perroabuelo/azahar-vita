@@ -1,0 +1,55 @@
+Azahar Vita milestone 1 host build validation
+Date: 2026-09-11
+Git commit: f49a51fd2b69a9b2d8809f6627d0dcca34915ea9
+
+VitaSDK:
+Release   2026.08
+Sequence  2026091144
+Toolchain sdk-snapshot-20260825.611.1
+Packages  packages-2026.08-snapshot-20260911.41.1
+Installed 2026.08.1-1
+Compiler  GCC 15.2.0
+
+Canonical common probe ELF:
+Path: build-vita/hito1-cmake/azahar_vita_common_probe
+Class: ELF32
+Machine: ARM
+Flags: Version5 EABI, hard-float ABI
+Text: 492088 bytes
+Data: 4742 bytes
+BSS: 290256 bytes
+Total: 787086 bytes
+
+Canonical common probe VPK:
+Path: build-vita/hito1-cmake/azahar_vita_common_probe.vpk
+File size: 364900 bytes
+SHA-256: ccfe1e6b257699128ef68be51c06841c782ba447702a148055bf447b363b5fd8
+Title ID: AZHV00002
+App version: 00.01
+Title: Azahar Vita Common Probe
+Contents:
+- sce_sys/param.sfo
+- eboot.bin
+
+Forced-failure common probe:
+Path: build-vita/hito1-failure/azahar_vita_common_probe.vpk
+File size: 341049 bytes
+SHA-256: f05d875612ac853cc8fc33903f85cd88afe0f5ec4eb52ac874ed86c1d927da0d
+
+Minimal dependency graph:
+- fmt 12.0.0, header-only
+- Boost headers
+- VitaSDK pthread and Sce system stubs
+
+Host validation:
+PASS CMake normal build
+PASS CMake forced-failure build
+PASS retained milestone 0 CMake build
+PASS retained milestone 0 Make build
+PASS ELF32 ARM hard-float inspection
+PASS VPK contents and SFO metadata
+PASS forbidden dependency symbol audit
+PASS scalar FindMinMax regression
+
+Physical Vita validation: PENDING
+Milestone 1: IN PHYSICAL VALIDATION
