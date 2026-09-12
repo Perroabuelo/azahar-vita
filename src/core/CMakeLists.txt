@@ -471,6 +471,8 @@ add_library(citra_core STATIC EXCLUDE_FROM_ALL
     hw/y2r.h
     loader/3dsx.cpp
     loader/3dsx.h
+    loader/3dsx_image.cpp
+    loader/3dsx_image.h
     loader/artic.cpp
     loader/artic.h
     loader/elf.cpp
