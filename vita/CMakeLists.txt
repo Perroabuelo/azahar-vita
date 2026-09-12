@@ -22,6 +22,8 @@ option(AZAHAR_VITA_BUILD_DYNCOM_PROBE "Build the milestone 2 DynCom probe" OFF)
 option(AZAHAR_VITA_DYNCOM_FORCE_FAILURE "Show and log the DynCom probe failure path" OFF)
 option(AZAHAR_VITA_BUILD_SYSTEM_PROBE "Build the milestone 3 loader/memory/kernel probe" OFF)
 option(AZAHAR_VITA_SYSTEM_FORCE_FAILURE "Show and log the system probe failure path" OFF)
+option(AZAHAR_VITA_BUILD_BUDGET_PROBE "Build the milestone 4 memory budget probe" OFF)
+option(AZAHAR_VITA_BUDGET_FORCE_FAILURE "Show and log the budget probe failure path" OFF)
 
 set(AZAHAR_VITA_WARNINGS
     -Wall
@@ -249,6 +251,112 @@ if(AZAHAR_VITA_BUILD_SYSTEM_PROBE)
     vita_create_vpk(azahar_vita_system_probe.vpk AZHV00004 eboot.bin
         VERSION 00.01
         NAME "Azahar Vita System Probe"
+    )
+    return()
+endif()
+
+if(AZAHAR_VITA_BUILD_BUDGET_PROBE)
+    # Same generated common/setting_keys.h dance as the milestone 3 block above (see its comment);
+    # this block has its own AZAHAR_ROOT-relative output directory, so it is repeated rather than
+    # shared across the early-return blocks.
+    include("${AZAHAR_ROOT}/CMakeModules/SettingKeysList.cmake")
+    string(LENGTH "${SETTING_KEY_LIST}" AZAHAR_SETTING_KEY_LIST_LENGTH)
+    math(EXPR AZAHAR_SETTING_KEY_LIST_NEW_LENGTH "${AZAHAR_SETTING_KEY_LIST_LENGTH} - 1")
+    string(SUBSTRING "${SETTING_KEY_LIST}" 0 ${AZAHAR_SETTING_KEY_LIST_NEW_LENGTH} SETTING_KEY_LIST)
+    configure_file("${AZAHAR_ROOT}/src/common/setting_keys.h.in"
+                   "${CMAKE_CURRENT_BINARY_DIR}/generated/common/setting_keys.h" @ONLY)
+
+    # Same core/ source list as citra_system_probe above: the budget corpus's load_release_cycles
+    # group repeats the milestone 3 loader/memory/kernel sequence, so it needs everything that does.
+    add_library(citra_budget_probe STATIC
+        "${AZAHAR_ROOT}/src/common/settings.cpp"
+        "${AZAHAR_ROOT}/src/core/arm/dyncom/arm_dyncom.cpp"
+        "${AZAHAR_ROOT}/src/core/arm/dyncom/arm_dyncom_dec.cpp"
+        "${AZAHAR_ROOT}/src/core/arm/dyncom/arm_dyncom_interpreter.cpp"
+        "${AZAHAR_ROOT}/src/core/arm/dyncom/arm_dyncom_thumb.cpp"
+        "${AZAHAR_ROOT}/src/core/arm/dyncom/arm_dyncom_trans.cpp"
+        "${AZAHAR_ROOT}/src/core/arm/skyeye_common/armstate.cpp"
+        "${AZAHAR_ROOT}/src/core/arm/skyeye_common/armsupp.cpp"
+        "${AZAHAR_ROOT}/src/core/arm/skyeye_common/vfp/vfp.cpp"
+        "${AZAHAR_ROOT}/src/core/arm/skyeye_common/vfp/vfpdouble.cpp"
+        "${AZAHAR_ROOT}/src/core/arm/skyeye_common/vfp/vfpsingle.cpp"
+        "${AZAHAR_ROOT}/src/core/core_timing.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/address_arbiter.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/client_port.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/client_session.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/config_mem.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/event.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/handle_table.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/hle_ipc.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/ipc.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/ipc_debugger/recorder.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/kernel.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/memory.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/mutex.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/object.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/process.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/resource_limit.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/semaphore.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/server_port.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/server_session.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/session.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/shared_memory.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/shared_page.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/thread.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/timer.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/vm_manager.cpp"
+        "${AZAHAR_ROOT}/src/core/hle/kernel/wait_object.cpp"
+        "${AZAHAR_ROOT}/src/core/loader/3dsx_image.cpp"
+        "${AZAHAR_ROOT}/src/core/memory.cpp"
+    )
+    target_compile_features(citra_budget_probe PUBLIC cxx_std_20)
+    target_compile_definitions(citra_budget_probe PUBLIC
+        AZAHAR_VITA=1
+        MICROPROFILE_ENABLED=0
+        ENABLE_SOFTWARE_RENDERER=1
+        TRANS_CACHE_SIZE=2097152
+    )
+    target_compile_options(citra_budget_probe PRIVATE
+        -Wall
+        -Os
+        -ffunction-sections
+        -fdata-sections
+    )
+    target_include_directories(citra_budget_probe PUBLIC
+        "${AZAHAR_ROOT}/src"
+        "${AZAHAR_ROOT}/externals/boost"
+        "${AZAHAR_ROOT}/externals/microprofile"
+        "${CMAKE_CURRENT_BINARY_DIR}/generated"
+    )
+    target_link_libraries(citra_budget_probe PUBLIC citra_common)
+
+    add_executable(azahar_vita_budget_probe
+        src/budget_corpus.cpp
+        src/budget_main.cpp
+        src/system_corpus.cpp
+    )
+    target_compile_features(azahar_vita_budget_probe PRIVATE cxx_std_20)
+    target_compile_options(azahar_vita_budget_probe PRIVATE ${AZAHAR_VITA_WARNINGS} -Os)
+    target_link_options(azahar_vita_budget_probe PRIVATE
+        "-Wl,--gc-sections,-Map=${CMAKE_CURRENT_BINARY_DIR}/azahar_vita_budget_probe.map"
+    )
+    if(AZAHAR_VITA_BUDGET_FORCE_FAILURE)
+        target_compile_definitions(azahar_vita_budget_probe PRIVATE
+            AZAHAR_VITA_BUDGET_FORCE_FAILURE=1)
+    endif()
+    target_link_libraries(azahar_vita_budget_probe PRIVATE
+        citra_budget_probe
+        SceCtrl_stub
+        SceDisplay_stub
+        SceIofilemgr_stub
+        SceKernelThreadMgr_stub
+        SceSysmem_stub
+    )
+
+    vita_create_self(eboot.bin azahar_vita_budget_probe)
+    vita_create_vpk(azahar_vita_budget_probe.vpk AZHV00005 eboot.bin
+        VERSION 00.01
+        NAME "Azahar Vita Memory Probe"
     )
     return()
 endif()
