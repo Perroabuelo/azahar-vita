@@ -147,7 +147,9 @@ This validation was completed on 2026-09-11; the retained evidence is the canoni
 5. Retain the normal and forced logs plus SDK version, commit, ELF size, VPK hashes, and validator
    output under `build-vita/evidence/hito-1`.
 
-Milestone 1 remains in physical validation until this evidence is committed.
+This validation was completed on 2026-09-11. The forced-failure path produced the expected
+`0xA1000001` result, and the normal probe passed three consecutive launches with every common-library
+check recorded as `PASS`. The retained logs and build record are the canonical evidence.
 
 ## Porting order
 

@@ -42,6 +42,9 @@ the normal six-band probe were verified with VitaSDK 2026.08; the normal run rec
 check as `PASS` and exited through the START input. The validated VPK SHA-256 is
 `fd26bd100970fbaf0fc9ab3d565b7caa4a3096bc993d66576fc1a573eb9d1e6b`.
 
-Milestone 1 now has a host-validated ARMv7 build and is awaiting physical Vita validation. Its
-dependency graph contains fmt in header-only mode and Boost headers; desktop frontends, network,
-audio, renderers, Crypto++, zstd, and compiled Boost libraries are not linked.
+Milestone 1 was completed on physical Vita hardware on 2026-09-11. The forced-failure probe recorded
+the expected `0xA1000001` code, and the normal six-band probe completed three consecutive launches.
+The final run passed logger, common types, serialization, timer, filesystem, memory, controller, and
+framebuffer cleanup checks without a `FAIL` record. Its dependency graph contains fmt in header-only
+mode and Boost headers; desktop frontends, network, audio, renderers, Crypto++, zstd, and compiled
+Boost libraries are not linked.
