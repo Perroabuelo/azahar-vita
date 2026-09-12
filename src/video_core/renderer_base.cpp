@@ -3,13 +3,43 @@
 // Refer to the license.txt file included.
 
 #include "common/settings.h"
+#include "video_core/renderer_base.h"
+
+#if defined(AZAHAR_VITA)
+#include "video_core/renderer_environment.h"
+#else
 #include "core/core.h"
 #include "core/frontend/emu_window.h"
 #include "core/tracer/recorder.h"
 #include "video_core/debug_utils/debug_utils.h"
-#include "video_core/renderer_base.h"
+#endif
 
 namespace VideoCore {
+
+#if defined(AZAHAR_VITA)
+
+RendererBase::RendererBase(RendererEnvironment& environment_) : environment{environment_} {}
+
+RendererBase::~RendererBase() = default;
+
+u32 RendererBase::GetResolutionScaleFactor() {
+    // No Frontend::EmuWindow to fall back on here; the environment is authoritative. See
+    // RendererEnvironment::GetResolutionScaleFactor's doc comment for why 1 is the right default.
+    return environment.GetResolutionScaleFactor();
+}
+
+void RendererBase::EndFrame() {
+    current_frame++;
+
+    environment.EndSystemFrame();
+
+    environment.PollEvents();
+
+    environment.LimitFrame();
+    environment.BeginSystemFrame();
+}
+
+#else
 
 RendererBase::RendererBase(Core::System& system_, Frontend::EmuWindow& window,
                            Frontend::EmuWindow* secondary_window_)
@@ -66,4 +96,7 @@ void RendererBase::RequestScreenshot(void* data, std::function<void(bool)> callb
     settings.screenshot_framebuffer_layout = layout;
     settings.screenshot_requested = true;
 }
+
+#endif
+
 } // namespace VideoCore

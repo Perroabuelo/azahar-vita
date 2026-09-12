@@ -12,12 +12,15 @@
 #include "common/assert.h"
 #include "common/bit_field.h"
 #include "common/vector_math.h"
-#include "core/core.h"
 #include "video_core/debug_utils/debug_utils.h"
-#include "video_core/gpu.h"
 #include "video_core/pica/regs_shader.h"
 #include "video_core/pica/shader_setup.h"
+
+#if !defined(AZAHAR_VITA)
+#include "core/core.h"
+#include "video_core/gpu.h"
 #include "video_core/renderer_base.h"
+#endif
 
 using nihstro::DVLBHeader;
 using nihstro::DVLEHeader;
@@ -29,9 +32,13 @@ void DebugContext::DoOnEvent(Event event, const void* data) {
     {
         std::unique_lock lock{breakpoint_mutex};
 
+#if !defined(AZAHAR_VITA)
         // Commit the rasterizer's caches so framebuffers, render targets, etc. will show on debug
-        // widgets
+        // widgets. Not reachable on Vita: the port has no debug-widget frontend to flush for, and
+        // this is the one edge in the whole software-renderer source set that would otherwise pull
+        // in Core::System (see docs/vita-port.md).
         Core::System::GetInstance().GPU().Renderer().Rasterizer()->FlushAll();
+#endif
 
         // TODO: Should stop the CPU thread here once we multithread emulation.
 

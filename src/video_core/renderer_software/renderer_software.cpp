@@ -3,24 +3,46 @@
 // Refer to the license.txt file included.
 
 #include "common/color.h"
-#include "core/core.h"
-#include "video_core/gpu.h"
 #include "video_core/pica/pica_core.h"
 #include "video_core/renderer_software/renderer_software.h"
 
+#if defined(AZAHAR_VITA)
+#include "video_core/renderer_environment.h"
+#else
+#include "core/core.h"
+#include "video_core/gpu.h"
+#endif
+
 namespace SwRenderer {
+
+#if defined(AZAHAR_VITA)
+
+RendererSoftware::RendererSoftware(VideoCore::RendererEnvironment& environment_,
+                                   Pica::PicaCore& pica_)
+    : VideoCore::RendererBase{environment_}, memory{environment_.Memory()}, pica{pica_},
+      rasterizer{memory, pica} {}
+
+#else
 
 RendererSoftware::RendererSoftware(Core::System& system, Pica::PicaCore& pica_,
                                    Frontend::EmuWindow& window)
     : VideoCore::RendererBase{system, window, nullptr}, memory{system.Memory()}, pica{pica_},
       rasterizer{memory, pica} {}
 
+#endif
+
 RendererSoftware::~RendererSoftware() = default;
 
 void RendererSoftware::SwapBuffers() {
+#if defined(AZAHAR_VITA)
+    environment.StartSwap();
+    PrepareRenderTarget();
+    environment.EndSwap();
+#else
     system.perf_stats->StartSwap();
     PrepareRenderTarget();
     system.perf_stats->EndSwap();
+#endif
     EndFrame();
 }
 

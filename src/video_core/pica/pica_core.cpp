@@ -7,8 +7,12 @@
 #include "common/microprofile.h"
 #include "common/scope_exit.h"
 #include "common/settings.h"
-#include "core/core.h"
 #include "core/memory.h"
+#if !defined(AZAHAR_VITA)
+// Only used by CommandList::serialize below, which SERIALIZE_IMPL (common/archives.h) turns into a
+// never-instantiated template body under AZAHAR_VITA - savestates are out of the Vita port's scope.
+#include "core/core.h"
+#endif
 #include "video_core/debug_utils/debug_utils.h"
 #include "video_core/pica/pica_core.h"
 #include "video_core/pica/vertex_loader.h"
@@ -1254,8 +1258,13 @@ void PicaCore::CommandList::serialize(Archive& ar, const u32 file_version) {
     ar & length;
     ar & current_index;
     if (Archive::is_loading::value) {
+#if !defined(AZAHAR_VITA)
+        // Guarded (rather than the whole function) because Core::System::GetInstance() is a
+        // non-dependent name: it must resolve even though this template is never instantiated
+        // under AZAHAR_VITA (SERIALIZE_IMPL is a no-op there - see common/archives.h).
         const u8* ptr = Core::System::GetInstance().Memory().GetPhysicalPointer(addr);
         head = reinterpret_cast<const u32*>(ptr);
+#endif
     }
 }
 

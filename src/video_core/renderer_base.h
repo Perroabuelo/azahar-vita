@@ -5,8 +5,13 @@
 #pragma once
 
 #include "common/common_types.h"
-#include "core/frontend/framebuffer_layout.h"
 #include "video_core/rasterizer_interface.h"
+
+#if defined(AZAHAR_VITA)
+#include "video_core/renderer_environment.h"
+#else
+#include "core/frontend/framebuffer_layout.h"
+#endif
 
 namespace Frontend {
 class EmuWindow;
@@ -24,6 +29,7 @@ enum class ScreenId : u32 {
     Bottom,
 };
 
+#if !defined(AZAHAR_VITA)
 struct RendererSettings {
     // Screenshot
     std::atomic_bool screenshot_requested{false};
@@ -34,11 +40,20 @@ struct RendererSettings {
     std::atomic_bool bg_color_update_requested{false};
     std::atomic_bool shader_update_requested{false};
 };
+#endif
 
 class RendererBase : NonCopyable {
 public:
+#if defined(AZAHAR_VITA)
+    // Drives RendererBase directly over a caller-owned RendererEnvironment, without Core::System
+    // or Frontend::EmuWindow. Used by harnesses (such as the Vita port) that need a real
+    // RendererBase - e.g. to run RendererSoftware - without the rest of Core::System. Mirrors
+    // ARM_DynCom's Core::DynComEnvironment constructor (core/arm/dyncom/arm_dyncom.h).
+    explicit RendererBase(RendererEnvironment& environment);
+#else
     explicit RendererBase(Core::System& system, Frontend::EmuWindow& window,
                           Frontend::EmuWindow* secondary_window);
+#endif
     virtual ~RendererBase();
 
     /// Returns the rasterizer owned by the renderer
@@ -67,8 +82,10 @@ public:
     /// Returns the resolution scale factor relative to the native 3DS screen resolution
     u32 GetResolutionScaleFactor();
 
+#if !defined(AZAHAR_VITA)
     /// Updates the framebuffer layout of the contained render window handle.
     void UpdateCurrentFramebufferLayout(bool is_portrait_mode = {});
+#endif
 
     /// Ends the current frame
     void EndFrame();
@@ -81,6 +98,7 @@ public:
         return current_frame;
     }
 
+#if !defined(AZAHAR_VITA)
     Frontend::EmuWindow& GetRenderWindow() {
         return render_window;
     }
@@ -103,12 +121,17 @@ public:
     /// Request a screenshot of the next frame
     void RequestScreenshot(void* data, std::function<void(bool)> callback,
                            const Layout::FramebufferLayout& layout);
+#endif
 
 protected:
+#if defined(AZAHAR_VITA)
+    RendererEnvironment& environment;
+#else
     Core::System& system;
     RendererSettings settings;
     Frontend::EmuWindow& render_window;    /// Reference to the render window handle.
     Frontend::EmuWindow* secondary_window; /// Reference to the secondary render window handle.
+#endif
 
 protected:
     f32 current_fps = 0.0f; /// Current framerate, should be set by the renderer

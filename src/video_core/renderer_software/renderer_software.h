@@ -21,8 +21,15 @@ struct ScreenInfo {
 
 class RendererSoftware : public VideoCore::RendererBase {
 public:
+#if defined(AZAHAR_VITA)
+    // Drives RendererSoftware directly over a caller-owned VideoCore::RendererEnvironment, without
+    // Core::System or Frontend::EmuWindow. Used by harnesses (such as the Vita port) that need the
+    // real software renderer without the rest of Core::System.
+    explicit RendererSoftware(VideoCore::RendererEnvironment& environment, Pica::PicaCore& pica);
+#else
     explicit RendererSoftware(Core::System& system, Pica::PicaCore& pica,
                               Frontend::EmuWindow& window);
+#endif
     ~RendererSoftware() override;
 
     [[nodiscard]] VideoCore::RasterizerInterface* Rasterizer() override {
