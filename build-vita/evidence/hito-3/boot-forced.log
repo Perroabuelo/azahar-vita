@@ -1,0 +1,4 @@
+[   0.013140] Core.ARM11 <Info> system_main.cpp:main:152: system_probe_version=03.00 platform=vita
+[   0.028350] Core.ARM11 <Info> system_main.cpp:main:170: PASS logger backend=vita path=ux0:data/azahar-vita/boot.log
+[   0.321404] Core.ARM11 <Error> system_main.cpp:Fail:131: FAIL forced_failure code=0xA3000001
+[   0.321780] Core.ARM11 <Error> system_main.cpp:Fail:132: RESULT FAIL

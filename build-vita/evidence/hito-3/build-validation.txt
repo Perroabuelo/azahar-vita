@@ -1,0 +1,62 @@
+Azahar Vita milestone 3 host build validation
+Date: 2026-09-12
+Git commit: 763d6a7164ad567810e31d5c24c959d16a0ab5fb
+
+VitaSDK:
+Release   2026.08
+Sequence  2026091144
+Toolchain sdk-snapshot-20260825.611.1
+Packages  packages-2026.08-snapshot-20260911.41.1
+Installed 2026.08.1-1
+Compiler GCC 15.2.0
+
+Canonical system probe ELF:
+Path: build-vita/hito3-cmake/azahar_vita_system_probe
+Class: ELF32
+Machine: ARM
+Flags: Version5 EABI, hard-float ABI
+Text: 668096 bytes
+Data: 12342 bytes
+BSS: 2388512 bytes
+Total: 3068950 bytes
+Translation cache: 2097152 bytes
+
+Canonical system probe VPK:
+Path: build-vita/hito3-cmake/azahar_vita_system_probe.vpk
+SHA-256: 13581c25236f0b23ccf5cfc74233c302b269783b4ac55c72867b75e0930c590f
+Title ID: AZHV00004
+App version: 00.01
+Title: Azahar Vita System Probe
+Contents:
+- sce_sys/param.sfo
+- eboot.bin
+
+Forced-failure system probe:
+Path: build-vita/hito3-failure/azahar_vita_system_probe.vpk
+Text: 477928 bytes
+Data: 11726 bytes
+BSS: 290256 bytes
+Total: 779910 bytes
+SHA-256: 734c3b6ff6720cbd72f01730ea940f7afca998b7dd00bcee13b982e59c33ca08
+
+Host validation:
+PASS desktop system reference groups=5
+PASS group=loader_identify signature=0x040C5B8C
+PASS group=diagnostics signature=0x070C6045
+PASS group=memory_and_process signature=0x040C5B8C
+PASS group=entry_point signature=0x040C5B8C
+PASS group=svc_and_service_ipc signature=0x30CCBD42
+PASS CMake normal Vita build
+PASS CMake forced-failure Vita build
+PASS retained milestone 1/2 CMake builds
+PASS ELF32 ARM hard-float inspection
+PASS VPK contents and SFO metadata
+PASS Kernel/Memory/Loader symbols and 2 MiB translation cache
+PASS forbidden dependency symbol audit (Core::System, GDBStub::, PLGLDR::, Qt, Vulkan, OpenGL,
+     ZSTD, CryptoPP, boost::iostreams/archive absent)
+
+Physical Vita validation:
+PASS forced-failure path code=0xA3000001 result=FAIL
+
+Physical validation date: 2026-09-12 (in progress)
+Milestone 3: IN PROGRESS - normal probe run pending
