@@ -7,34 +7,99 @@ Azahar while the platform assumptions are tested.
 
 The first VPK verifies:
 
-- VitaSDK can compile the required C++20 subset.
-- A 32-bit ARM executable can be packaged and launched.
-- A 960x544 framebuffer can be allocated in CDRAM.
-- Display and controller APIs work.
-- Runtime diagnostics can be written to `ux0:data/azahar-vita/boot.log`.
+- VitaSDK compiles `std::span` and the required C++20 language mode.
+- The output is a 32-bit ARM EABI executable that can be packaged and launched.
+- A 960x544 framebuffer can be allocated in 256 KiB-aligned CDRAM.
+- Display, VBlank, and controller APIs work and report successful return values.
+- Deterministic diagnostics can be written to `ux0:data/azahar-vita/boot.log`.
 
-It displays six horizontal color bands. Press **START** to exit.
+The success path displays six horizontal color bands until **START** is pressed. A detected failure
+displays alternating magenta and black bands for five seconds, writes a `FAIL` record when possible,
+and exits with a non-zero status.
 
-## Build
+## WSL2 toolchain setup
 
-Install VitaSDK, then run:
+The validated host is Ubuntu 24.04 under WSL2 with the stable VitaSDK `2026.08` channel. Install the
+SDK without root privileges under the WSL user's home directory:
 
 ```sh
-export VITASDK=/path/to/vitasdk
+sudo apt-get update
+sudo apt-get install -y cmake make git python3 curl bzip2
+git clone --depth 1 https://github.com/vitasdk/vdpm /tmp/vdpm
+VITASDK="$HOME/vitasdk" VITASDK_CHANNEL=2026.08 /tmp/vdpm/bootstrap-vitasdk.sh
+
+export VITASDK="$HOME/vitasdk"
 export PATH="$VITASDK/bin:$PATH"
-cmake -S vita -B build-vita -DCMAKE_BUILD_TYPE=Release
-cmake --build build-vita --parallel
+vdpm status
 ```
 
-If CMake is unavailable, the same probe has a self-contained Make build:
+The `VITASDK` and `PATH` exports may be added to `~/.bashrc` after installation.
+
+## Build and inspect
+
+CMake is the canonical build. Keep the normal and diagnostic variants in different directories:
 
 ```sh
-export VITASDK=/path/to/vitasdk
-make -f vita/Makefile
-make -f vita/Makefile size
+cmake -S vita -B build-vita/cmake -DCMAKE_BUILD_TYPE=Release
+cmake --build build-vita/cmake --parallel
+
+cmake -S vita -B build-vita/failure -DCMAKE_BUILD_TYPE=Release \
+    -DAZAHAR_VITA_PROBE_FORCE_FAILURE=ON
+cmake --build build-vita/failure --parallel
 ```
 
-The output is `build-vita/azahar_vita_probe.vpk`.
+The self-contained Makefile remains available as a fallback and always recompiles the small probe so
+that changing `FORCE_FAILURE` cannot reuse a stale object:
+
+```sh
+make -f vita/Makefile BUILD_DIR="$PWD/build-vita/make"
+make -f vita/Makefile BUILD_DIR="$PWD/build-vita/make-failure" FORCE_FAILURE=1
+make -f vita/Makefile BUILD_DIR="$PWD/build-vita/make" size
+```
+
+Inspect the canonical output before transferring it:
+
+```sh
+arm-vita-eabi-readelf -h build-vita/cmake/azahar_vita_probe
+arm-vita-eabi-size build-vita/cmake/azahar_vita_probe
+python3 -m zipfile -l build-vita/cmake/azahar_vita_probe.vpk
+strings build-vita/cmake/azahar_vita_probe.vpk_param.sfo
+sha256sum build-vita/cmake/azahar_vita_probe.vpk
+```
+
+The ELF header must report `ELF32`, `ARM`, and EABI. The VPK must contain `eboot.bin` and
+`sce_sys/param.sfo`; the SFO must contain title ID `AZHV00001`, app version `00.02`, and title
+`Azahar Vita Probe`.
+
+## Physical Vita validation
+
+Use a homebrew-enabled Vita with VitaShell and USB access to `ux0`:
+
+1. Copy `build-vita/failure/azahar_vita_probe.vpk` to the mounted Vita and install it in VitaShell.
+2. Launch it and verify alternating magenta/black bands followed by automatic exit after five
+   seconds. Its log must contain `FAIL forced_failure code=0xA0000001` and `RESULT FAIL`.
+3. Install `build-vita/cmake/azahar_vita_probe.vpk` over the diagnostic version and launch it.
+4. Verify six complete horizontal bands, press **START**, and confirm a clean return to LiveArea.
+5. Reconnect VitaShell USB and copy `ux0:data/azahar-vita/boot.log` into
+   `build-vita/evidence/boot.log` on the host.
+
+The final log is truncated on every launch and must have this shape, with no `FAIL` records:
+
+```text
+probe_version=00.02
+PASS log path=ux0:data/azahar-vita/boot.log
+PASS cxx20 standard=202002 pointer_bits=32 pattern_checksum=0x486CC51D
+PASS cdram bytes=2097152 alignment=262144
+PASS display width=960 height=544 pitch=960
+PASS controller mode=analog previous_mode=...
+PASS controller input=start
+PASS exit reason=start
+PASS cleanup framebuffer=released
+RESULT PASS
+```
+
+Milestone 0 is complete only after the normal VPK passes this physical test and its VPK checksum,
+`vdpm status` output, ELF header, and recovered boot log are retained under `build-vita/evidence`.
 
 ## Porting order
 
