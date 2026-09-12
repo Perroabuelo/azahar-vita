@@ -102,7 +102,19 @@ private:
 
 RasterizerSoftware::RasterizerSoftware(Memory::MemorySystem& memory_, Pica::PicaCore& pica_)
     : memory{memory_}, pica{pica_}, regs{pica.regs.internal},
+#if defined(AZAHAR_VITA)
+      // Physical-hardware testing on 2026-09-12 found that constructing even a single std::jthread
+      // here reliably crashes on real Vita hardware with an "Undefined instruction exception" at a
+      // deterministic offset (confirmed identical across repeated launches via the recovered
+      // psp2dmp core dumps) - VitaSDK's C++20 std::jthread/std::stop_token support does not work on
+      // this target. 0 workers constructs an empty std::vector<std::jthread> (never instantiating
+      // std::jthread's constructor at all), and ProcessTriangle below calls each scanline directly
+      // on the calling thread instead of going through QueueWork/WaitForRequests - correct either
+      // way, since the software rasterizer's own frame data has no cross-scanline dependencies.
+      num_sw_threads{0},
+#else
       num_sw_threads{std::max(std::thread::hardware_concurrency(), 2U)},
+#endif
       sw_workers{num_sw_threads, "SwRenderer workers"}, fb{memory, regs.framebuffer} {}
 
 void RasterizerSoftware::AddTriangle(const Pica::OutputVertex& v0, const Pica::OutputVertex& v1,
@@ -467,9 +479,18 @@ void RasterizerSoftware::ProcessTriangle(const Vertex& v0, const Vertex& v1, con
                 }
             }
         };
+#if defined(AZAHAR_VITA)
+        // No worker threads to hand this off to on Vita - see the constructor's comment. Run it
+        // directly on the calling thread instead; process_scanline captures everything it needs
+        // by reference (plus y by value), so it is just as correct called synchronously.
+        process_scanline();
+#else
         sw_workers.QueueWork(std::move(process_scanline));
+#endif
     }
+#if !defined(AZAHAR_VITA)
     sw_workers.WaitForRequests();
+#endif
 }
 
 std::array<Common::Vec4<u8>, 4> RasterizerSoftware::TextureColor(
