@@ -102,7 +102,7 @@ public:
         });
     }
 
-    const std::size_t NumWorkers() const noexcept {
+    std::size_t NumWorkers() const noexcept {
         return threads.size();
     }
 
