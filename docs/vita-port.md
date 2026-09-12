@@ -42,7 +42,7 @@ normal VPK passed three consecutive launches with all seven desktop-reference si
 invalid memory accesses, stable user memory, clean framebuffer release, and 1,469,795 interpreted
 instructions per second in the retained run.
 
-## Milestone 3 progress
+## Milestone 3 closure
 
 Milestone 3 links the real loader, memory system and HLE kernel rather than an isolated corpus:
 `Core::MemoryEnvironment` and the existing `Core::DynComEnvironment` let `Memory::MemorySystem`,
@@ -52,12 +52,13 @@ in code, no external binary or relocations) reaches its real entry point through
 ThreadManager::Reschedule()` and exercises a small SVC table plus one IPC round trip against a
 probe service.
 
-The code is complete and verified: a full `citra_core` and `tests` rebuild on desktop, a desktop
-reference (`azahar_system_host_probe`) reporting `RESULT PASS groups=5`, and a real VitaSDK build
-producing a validated `azahar_vita_system_probe.vpk` (see `vita/scripts/validate-hito3.sh`).
-**Physical validation on Vita hardware has not been done yet**, and the memory budget question
-noted in `vita/README.md` (128 MiB FCRAM plus page tables against the ~119 MiB of free user memory
-milestone 2 measured without an extended budget) is open pending that hardware test.
+Physical validation on 2026-09-12 found that VitaSDK's default 128 MiB newlib heap is not enough
+for `Memory::MemorySystem`'s ~138.5 MiB of plain heap allocations (FCRAM, VRAM, N3DS extra RAM, DSP
+RAM) plus a per-process page table: the first attempt crashed natively on all three launches, with
+no boot.log record past the logger check. Defining `_newlib_heap_size_user = 192 MiB` (VitaSDK's
+documented mechanism for exactly this, distinct from the "system mode app" budget `vita-make-
+fself`'s `-m` flag exposes) resolved it; the rebuilt probe then passed three consecutive launches
+with all five corpus groups matching the desktop reference bit for bit and stable user memory.
 
 ## Validation status
 
@@ -77,3 +78,10 @@ Milestone 2 was completed on physical Vita hardware on 2026-09-12. ARM and Thumb
 the native desktop reference across arithmetic, flags, branches, calls, memory, isolated SVC
 dispatch, register state, and a shared-memory core handoff. The bounded memory environment reported
 no invalid access, and the first retained benchmark reached 1,469,795 instructions per second.
+
+Milestone 3 was completed on physical Vita hardware on 2026-09-12. The real `Loader::
+Load3DSXImage`, `Memory::MemorySystem` and `Kernel::KernelSystem` loaded a synthetic 3DSX homebrew,
+reached its entry point through the kernel's own thread scheduler, and ran it to a clean
+`ExitProcess` after one IPC round trip - all five corpus groups (`loader_identify`,
+`memory_and_process`, `entry_point`, `svc_and_service_ipc`, `diagnostics`) matched the desktop
+reference's signatures exactly, with user memory stable across three consecutive launches.

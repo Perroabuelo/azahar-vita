@@ -37,7 +37,7 @@ La compatibilidad completa con el catálogo de 3DS no forma parte del alcance in
 | 0 | Sonda nativa instalada y validada en Vita | Completo |
 | 1 | Núcleo mínimo de Azahar compilando para ARMv7/Vita | Completo |
 | 2 | Intérprete ARM11 ejecutando pruebas deterministas | Completo |
-| 3 | Loader, memoria y kernel HLE ejecutando homebrew sin video | En progreso |
+| 3 | Loader, memoria y kernel HLE ejecutando homebrew sin video | Completo |
 | 4 | Presupuesto de memoria estable y medible | Pendiente |
 | 5 | Imagen correcta mediante renderizador de referencia | Pendiente |
 | 6 | Backend gráfico acelerado para Vita | Pendiente |
@@ -342,13 +342,13 @@ contribuciones de la comunidad.
 
 ## Próximas acciones
 
-1. Validar físicamente en hardware Vita real la sonda del Hito 3
-   (`build-vita/hito3-cmake/azahar_vita_system_probe.vpk`), incluyendo si el presupuesto de FCRAM
-   de O3DS (128 MiB) más las tablas de página caben en la memoria de usuario disponible al lanzar
-   desde VitaShell, o si se necesita solicitar un presupuesto extendido.
-2. Con esa evidencia retenida, cerrar el Hito 3 en este documento y en `docs/vita-port.md`.
-3. Empezar el Hito 4 (presupuesto de memoria estable y medible) con las mediciones reales que arroje
-   esa validación.
+1. Medir con precisión, subsistema por subsistema, el consumo real de RAM y CDRAM que dejó la
+   sonda del Hito 3 (FCRAM, VRAM, N3DS extra, tablas de página, el heap de 192 MiB solicitado a
+   newlib) como línea base del Hito 4.
+2. Separar y, donde sea posible, reducir esas asignaciones para dejar margen antes de sumar el
+   renderizador y los servicios de los hitos siguientes.
+3. Definir el criterio de fallo controlado por falta de memoria que pide el Hito 4, reutilizando el
+   mecanismo de diagnóstico ya probado en los hitos 0-3.
 
 El primer gran objetivo demostrable será ejecutar correctamente un homebrew de 3DS con CPU,
 imagen, controles y logs. En ese punto el proyecto habrá pasado de ser una prueba de VitaSDK a un

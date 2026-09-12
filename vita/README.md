@@ -256,15 +256,17 @@ The VPK uses title ID `AZHV00004`, version `00.01`, and title
 4. Recover `ux0:data/azahar-vita/boot.log` and retain it with the forced log, desktop output, SDK
    version, commit, sizes, hashes, and validator output under `build-vita/evidence/hito-3/`.
 
-This milestone's code is complete and verified on the desktop reference and with a real VitaSDK
-build (`vita/scripts/validate-hito3.sh` passes against both), but **physical validation on Vita
-hardware is still pending** as of this writing. The probe's static footprint is small (~2.3 MiB
-BSS, dominated by the 2 MiB translation cache), but its *runtime* FCRAM (128 MiB) plus per-process
-page tables (~5 MiB) approach or exceed the ~119 MiB of free user memory the milestone 2 probe
-measured on real hardware without requesting an extended memory budget. Whether this probe needs
-(and can obtain, when launched from VitaShell rather than a retail bubble) an extended budget via
-`vita_create_self`'s `MEMSIZE` option is an open question that needs to be resolved on real
-hardware, not guessed at from the SDK's documentation alone.
+The first physical attempt crashed natively on all three launches (confirmed by three
+`psp2core-*.psp2dmp` dumps, not a controlled failure): `boot.log` stopped right after the logger
+check. VitaSDK's newlib heap defaults to 128 MiB, and `Memory::MemorySystem` alone requests
+~138.5 MiB via plain heap allocations (128 MiB FCRAM, 6 MiB VRAM, 4 MiB N3DS extra RAM, 0.5 MiB DSP
+RAM), plus a ~5 MiB per-process page table on top - short by roughly 15 MiB. The fix was to define
+`_newlib_heap_size_user = 192 MiB` in `system_main.cpp`, VitaSDK's documented mechanism for exactly
+this (`share/gcc-arm-vita-eabi/samples/newlib_heapsize_ctrl`), not the "system mode app" budget
+`vita_create_self`'s `MEMSIZE` option exposes, which is a different, unrelated knob. The rebuilt VPK
+then passed three consecutive launches.
+
+This validation was completed on 2026-09-12; the retained evidence is the canonical record.
 
 ## Porting order
 
