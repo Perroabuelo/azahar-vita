@@ -26,14 +26,19 @@ using its libretro frontend immediately would hide platform failures behind Retr
 - Azahar's dependency graph must be reduced; cross-compiling every desktop dependency is neither a
   useful nor realistic first milestone.
 
-## Definition of the next milestone
+## Current milestone
 
 Milestone 1 is complete when the reduced `citra_common` target builds for Vita, its native probe
 passes the deterministic utility, logger, timer, filesystem, serialization, and memory checks on
 physical hardware, and the resulting ELF size and initial memory use are retained as evidence.
 
-Executing a deterministic group of ARM11 instructions through DynCom belongs to milestone 2. It
-does not need to load a commercial game.
+Milestone 2 is implemented as an isolated DynCom probe. The same deterministic ARM and Thumb corpus
+runs on desktop and Vita, uses bounds-checked flat memory, dispatches SVC through a probe callback,
+checks shared memory between two emulated cores, and records a first instructions-per-second
+measurement. Loader and kernel HLE integration remain part of milestone 3.
+
+The implementation is not considered complete until the normal and forced-failure VPKs are
+validated on physical Vita hardware and their logs are retained as evidence.
 
 ## Validation status
 

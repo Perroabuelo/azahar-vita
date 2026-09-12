@@ -4,7 +4,8 @@ This directory contains the Vita-specific bring-up code. It deliberately builds 
 Azahar while the platform assumptions are tested.
 
 The default CMake build is the milestone 1 common-library probe. The milestone 0 hardware probe is
-kept as an optional regression target and in the standalone Makefile.
+kept as an optional regression target and in the standalone Makefile. The milestone 2 DynCom probe
+is also selected explicitly so existing build commands remain stable.
 
 ## Milestone 0: hardware probe
 
@@ -150,6 +151,56 @@ This validation was completed on 2026-09-11; the retained evidence is the canoni
 This validation was completed on 2026-09-11. The forced-failure path produced the expected
 `0xA1000001` result, and the normal probe passed three consecutive launches with every common-library
 check recorded as `PASS`. The retained logs and build record are the canonical evidence.
+
+## Hito 2: ARM11 DynCom interpreter
+
+The third VPK executes the same deterministic DynCom corpus as the native desktop reference. It
+covers ARM arithmetic, logic, flags, branches, calls and memory operations; Thumb arithmetic,
+branches, memory and isolated SVC dispatch; register state; and a shared-memory handoff between two
+emulated cores. The probe uses a 2 MiB translation cache instead of DynCom's desktop-sized 128 MiB
+default.
+
+Build and run the desktop reference first:
+
+```sh
+cmake -S vita/tests -B build-vita/hito2-host -DCMAKE_BUILD_TYPE=Release
+cmake --build build-vita/hito2-host --parallel
+build-vita/hito2-host/azahar_dyncom_host_probe
+```
+
+Build normal and diagnostic Vita variants in separate directories:
+
+```sh
+cmake -S vita -B build-vita/hito2-cmake -DCMAKE_BUILD_TYPE=Release \
+    -DAZAHAR_VITA_BUILD_DYNCOM_PROBE=ON
+cmake --build build-vita/hito2-cmake --parallel
+
+cmake -S vita -B build-vita/hito2-failure -DCMAKE_BUILD_TYPE=Release \
+    -DAZAHAR_VITA_BUILD_DYNCOM_PROBE=ON \
+    -DAZAHAR_VITA_DYNCOM_FORCE_FAILURE=ON
+cmake --build build-vita/hito2-failure --parallel
+
+vita/scripts/validate-hito2.sh build-vita/hito2-cmake \
+    build-vita/hito2-host/azahar_dyncom_host_probe
+```
+
+The VPK uses title ID `AZHV00003`, version `00.01`, and title
+`Azahar Vita DynCom Probe`.
+
+## Hito 2 physical validation
+
+1. Install `build-vita/hito2-failure/azahar_vita_dyncom_probe.vpk`. It must show alternating
+   magenta/black bands, log `FAIL forced_failure code=0xA2000001` and `RESULT FAIL`, then exit after
+   five seconds.
+2. Install `build-vita/hito2-cmake/azahar_vita_dyncom_probe.vpk`. It must show six color bands and
+   remain responsive until **START** is pressed.
+3. Launch the normal probe three times. Every run must contain seven `PASS group=` records with the
+   same signatures as the desktop reference, `PASS memory bounds=clean`, a non-zero
+   `instructions_per_second`, and `RESULT PASS instructions=34` without any `FAIL` record.
+4. Recover `ux0:data/azahar-vita/boot.log` and retain it with the forced log, desktop output, SDK
+   version, commit, sizes, hashes, and validator output under `build-vita/evidence/hito-2`.
+
+Milestone 2 remains pending until this physical validation is complete.
 
 ## Porting order
 
