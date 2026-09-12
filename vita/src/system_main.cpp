@@ -18,6 +18,18 @@
 #include "common/logging/log.h"
 #include "system_corpus.h"
 
+// VitaSDK's newlib startup reads this weak symbol to size the malloc/new heap it requests at
+// launch (see share/gcc-arm-vita-eabi/samples/newlib_heapsize_ctrl in the SDK); the default is
+// 128 MiB. Memory::MemorySystem alone allocates ~138.5 MiB (128 MiB FCRAM + 6 MiB VRAM + 4 MiB
+// N3DS extra RAM + 0.5 MiB DSP RAM) via plain heap allocations, on top of which the kernel adds a
+// ~5 MiB page table per process, so the default heap is not enough: a normal run exhausted it and
+// crashed (confirmed on hardware, no forced-failure build involved). 192 MiB leaves headroom for
+// that plus bookkeeping without yet requesting the exotic "system mode" memory budget documented
+// for vita-make-fself's -m flag, which this is not.
+extern "C" {
+unsigned int _newlib_heap_size_user = SCE_KERNEL_128MiB + SCE_KERNEL_64MiB;
+}
+
 namespace {
 
 constexpr int ScreenWidth = 960;
