@@ -42,6 +42,23 @@ normal VPK passed three consecutive launches with all seven desktop-reference si
 invalid memory accesses, stable user memory, clean framebuffer release, and 1,469,795 interpreted
 instructions per second in the retained run.
 
+## Milestone 3 progress
+
+Milestone 3 links the real loader, memory system and HLE kernel rather than an isolated corpus:
+`Core::MemoryEnvironment` and the existing `Core::DynComEnvironment` let `Memory::MemorySystem`,
+`Kernel::KernelSystem` and a `Core::ARM_DynCom` built directly over an environment run without
+`Core::System`, the renderer, audio, network, or savestates. A synthetic 3DSX homebrew (generated
+in code, no external binary or relocations) reaches its real entry point through `Kernel::
+ThreadManager::Reschedule()` and exercises a small SVC table plus one IPC round trip against a
+probe service.
+
+The code is complete and verified: a full `citra_core` and `tests` rebuild on desktop, a desktop
+reference (`azahar_system_host_probe`) reporting `RESULT PASS groups=5`, and a real VitaSDK build
+producing a validated `azahar_vita_system_probe.vpk` (see `vita/scripts/validate-hito3.sh`).
+**Physical validation on Vita hardware has not been done yet**, and the memory budget question
+noted in `vita/README.md` (128 MiB FCRAM plus page tables against the ~119 MiB of free user memory
+milestone 2 measured without an extended budget) is open pending that hardware test.
+
 ## Validation status
 
 Milestone 0 was completed on physical Vita hardware on 2026-09-11. Both the forced-failure path and

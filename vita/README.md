@@ -205,6 +205,67 @@ probe passed three consecutive launches with all seven desktop-reference signatu
 memory access. The retained run reported stable user memory and 1,469,795 interpreted instructions
 per second before a clean exit through **START**.
 
+## Hito 3: loader, memory and kernel HLE
+
+The fourth VPK links the real `Memory::MemorySystem`, `Kernel::KernelSystem` and
+`Loader::Load3DSXImage`, driven by a `Core::ARM_DynCom` built directly over a `Core::
+DynComEnvironment` (no `Core::System`). It loads a synthetic 3DSX homebrew generated entirely in
+code, reaches the process's real entry point through `Kernel::ThreadManager::Reschedule()`, and
+exercises a small hand-written SVC table (`ConnectToPort`, `SendSyncRequest`, `OutputDebugString`,
+`ExitProcess`) including one IPC round trip against a `probe:test` service. FCRAM is sized for an
+Old 3DS (128 MiB) rather than New 3DS (256 MiB) to fit the platform's memory budget.
+
+Build and run the desktop reference first:
+
+```sh
+cmake -S vita/tests -B build-vita/hito3-host -DCMAKE_BUILD_TYPE=Release
+cmake --build build-vita/hito3-host --parallel
+build-vita/hito3-host/azahar_system_host_probe
+```
+
+Build normal and diagnostic Vita variants in separate directories:
+
+```sh
+cmake -S vita -B build-vita/hito3-cmake -DCMAKE_BUILD_TYPE=Release \
+    -DAZAHAR_VITA_BUILD_SYSTEM_PROBE=ON
+cmake --build build-vita/hito3-cmake --parallel
+
+cmake -S vita -B build-vita/hito3-failure -DCMAKE_BUILD_TYPE=Release \
+    -DAZAHAR_VITA_BUILD_SYSTEM_PROBE=ON \
+    -DAZAHAR_VITA_SYSTEM_FORCE_FAILURE=ON
+cmake --build build-vita/hito3-failure --parallel
+
+vita/scripts/validate-hito3.sh build-vita/hito3-cmake \
+    build-vita/hito3-host/azahar_system_host_probe
+```
+
+The VPK uses title ID `AZHV00004`, version `00.01`, and title
+`Azahar Vita System Probe`.
+
+## Hito 3 physical validation
+
+1. Install `build-vita/hito3-failure/azahar_vita_system_probe.vpk`. It must show alternating
+   magenta/black bands, log `FAIL forced_failure code=0xA3000001` and `RESULT FAIL`, then exit
+   after five seconds.
+2. Install `build-vita/hito3-cmake/azahar_vita_system_probe.vpk`. It must show six color bands and
+   remain responsive until **START** is pressed.
+3. Launch the normal probe three times. Every run must contain five `PASS group=` records
+   (`loader_identify`, `memory_and_process`, `entry_point`, `svc_and_service_ipc`, `diagnostics`)
+   with the same signatures as the desktop reference, and `RESULT PASS groups=5` without any `FAIL`
+   record.
+4. Recover `ux0:data/azahar-vita/boot.log` and retain it with the forced log, desktop output, SDK
+   version, commit, sizes, hashes, and validator output under `build-vita/evidence/hito-3/`.
+
+This milestone's code is complete and verified on the desktop reference and with a real VitaSDK
+build (`vita/scripts/validate-hito3.sh` passes against both), but **physical validation on Vita
+hardware is still pending** as of this writing. The probe's static footprint is small (~2.3 MiB
+BSS, dominated by the 2 MiB translation cache), but its *runtime* FCRAM (128 MiB) plus per-process
+page tables (~5 MiB) approach or exceed the ~119 MiB of free user memory the milestone 2 probe
+measured on real hardware without requesting an extended memory budget. Whether this probe needs
+(and can obtain, when launched from VitaShell rather than a retail bubble) an extended budget via
+`vita_create_self`'s `MEMSIZE` option is an open question that needs to be resolved on real
+hardware, not guessed at from the SDK's documentation alone.
+
 ## Porting order
 
 1. Compile `citra_common` without networking, desktop dynamic-library loading, or platform-specific
