@@ -5,6 +5,7 @@ add_library(citra_core STATIC EXCLUDE_FROM_ALL
     arm/exception_handler.h
     arm/dyncom/arm_dyncom.cpp
     arm/dyncom/arm_dyncom.h
+    arm/dyncom/arm_dyncom_environment.h
     arm/dyncom/arm_dyncom_dec.cpp
     arm/dyncom/arm_dyncom_dec.h
     arm/dyncom/arm_dyncom_interpreter.cpp

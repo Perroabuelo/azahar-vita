@@ -17,6 +17,7 @@ class MemorySystem;
 namespace Core {
 
 class System;
+class DynComEnvironment;
 
 class ARM_DynCom final : public ARM_Interface {
 public:
@@ -61,7 +62,7 @@ protected:
 private:
     void ExecuteInstructions(u64 num_instructions);
 
-    Core::System& system;
+    std::unique_ptr<DynComEnvironment> environment;
     std::unique_ptr<ARMul_State> state;
 };
 

@@ -6,21 +6,19 @@
 #include <csignal>
 #include "common/logging/log.h"
 #include "common/swap.h"
+#include "core/arm/dyncom/arm_dyncom_environment.h"
 #include "core/arm/skyeye_common/armstate.h"
 #include "core/arm/skyeye_common/vfp/vfp.h"
-#include "core/core.h"
 #ifdef ENABLE_GDBSTUB
 #include "core/gdbstub/gdbstub.h"
 #endif
-#include "core/memory.h"
 
 #ifndef SIGTRAP
 constexpr u32 SIGTRAP = 5;
 #endif
 
-ARMul_State::ARMul_State(Core::System& system_, Memory::MemorySystem& memory_,
-                         PrivilegeMode initial_mode)
-    : system{system_}, memory{memory_} {
+ARMul_State::ARMul_State(Core::DynComEnvironment& environment_, PrivilegeMode initial_mode)
+    : environment{environment_} {
     Reset();
     ChangePrivilegeMode(initial_mode);
 }
@@ -192,11 +190,11 @@ void ARMul_State::ResetMPCoreCP15Registers() {
 }
 
 u8 ARMul_State::ReadMemory8(u32 address) const {
-    return memory.Read8(address);
+    return environment.ReadMemory8(address);
 }
 
 u16 ARMul_State::ReadMemory16(u32 address) const {
-    u16 data = memory.Read16(address);
+    u16 data = environment.ReadMemory16(address);
 
     if (InBigEndianMode())
         data = Common::swap16(data);
@@ -205,7 +203,7 @@ u16 ARMul_State::ReadMemory16(u32 address) const {
 }
 
 u32 ARMul_State::ReadMemory32(u32 address) const {
-    u32 data = memory.Read32(address);
+    u32 data = environment.ReadMemory32(address);
 
     if (InBigEndianMode())
         data = Common::swap32(data);
@@ -214,7 +212,7 @@ u32 ARMul_State::ReadMemory32(u32 address) const {
 }
 
 u64 ARMul_State::ReadMemory64(u32 address) const {
-    u64 data = memory.Read64(address);
+    u64 data = environment.ReadMemory64(address);
 
     if (InBigEndianMode())
         data = Common::swap64(data);
@@ -223,28 +221,28 @@ u64 ARMul_State::ReadMemory64(u32 address) const {
 }
 
 void ARMul_State::WriteMemory8(u32 address, u8 data) {
-    memory.Write8(address, data);
+    environment.WriteMemory8(address, data);
 }
 
 void ARMul_State::WriteMemory16(u32 address, u16 data) {
     if (InBigEndianMode())
         data = Common::swap16(data);
 
-    memory.Write16(address, data);
+    environment.WriteMemory16(address, data);
 }
 
 void ARMul_State::WriteMemory32(u32 address, u32 data) {
     if (InBigEndianMode())
         data = Common::swap32(data);
 
-    memory.Write32(address, data);
+    environment.WriteMemory32(address, data);
 }
 
 void ARMul_State::WriteMemory64(u32 address, u64 data) {
     if (InBigEndianMode())
         data = Common::swap64(data);
 
-    memory.Write64(address, data);
+    environment.WriteMemory64(address, data);
 }
 
 // Reads from the CP15 registers. Used with implementation of the MRC instruction.

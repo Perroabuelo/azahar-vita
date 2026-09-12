@@ -30,11 +30,7 @@
 #endif
 
 namespace Core {
-class System;
-}
-
-namespace Memory {
-class MemorySystem;
+class DynComEnvironment;
 }
 
 // Signal levels
@@ -153,8 +149,7 @@ enum {
 
 struct ARMul_State final {
 public:
-    explicit ARMul_State(Core::System& system, Memory::MemorySystem& memory,
-                         PrivilegeMode initial_mode);
+    explicit ARMul_State(Core::DynComEnvironment& environment, PrivilegeMode initial_mode);
 
     void ChangePrivilegeMode(u32 new_mode);
     void Reset();
@@ -214,8 +209,7 @@ public:
 
     void ServeBreak();
 
-    Core::System& system;
-    Memory::MemorySystem& memory;
+    Core::DynComEnvironment& environment;
 
     std::array<u32, 16> Reg{}; // The current register file
     std::array<u32, 2> Reg_usr{};

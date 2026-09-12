@@ -6,19 +6,77 @@
 #include <cstring>
 #include <memory>
 #include "core/arm/dyncom/arm_dyncom.h"
+#include "core/arm/dyncom/arm_dyncom_environment.h"
 #include "core/arm/dyncom/arm_dyncom_interpreter.h"
 #include "core/arm/dyncom/arm_dyncom_trans.h"
 #include "core/arm/skyeye_common/armstate.h"
 #include "core/core.h"
 #include "core/core_timing.h"
+#include "core/hle/kernel/svc.h"
+#include "core/memory.h"
 
 namespace Core {
+
+namespace {
+
+class SystemDynComEnvironment final : public DynComEnvironment {
+public:
+    SystemDynComEnvironment(Core::System& system_, Memory::MemorySystem& memory_)
+        : system{system_}, memory{memory_} {}
+
+    u8 ReadMemory8(VAddr address) override {
+        return memory.Read8(address);
+    }
+
+    u16 ReadMemory16(VAddr address) override {
+        return memory.Read16(address);
+    }
+
+    u32 ReadMemory32(VAddr address) override {
+        return memory.Read32(address);
+    }
+
+    u64 ReadMemory64(VAddr address) override {
+        return memory.Read64(address);
+    }
+
+    void WriteMemory8(VAddr address, u8 value) override {
+        memory.Write8(address, value);
+    }
+
+    void WriteMemory16(VAddr address, u16 value) override {
+        memory.Write16(address, value);
+    }
+
+    void WriteMemory32(VAddr address, u32 value) override {
+        memory.Write32(address, value);
+    }
+
+    void WriteMemory64(VAddr address, u64 value) override {
+        memory.Write64(address, value);
+    }
+
+    void AddTicks(u64 ticks) override {
+        system.GetRunningCore().GetTimer().AddTicks(ticks);
+    }
+
+    void CallSVC(u32 number) override {
+        Kernel::SVCContext{system}.CallSVC(number);
+    }
+
+private:
+    Core::System& system;
+    Memory::MemorySystem& memory;
+};
+
+} // Anonymous namespace
 
 ARM_DynCom::ARM_DynCom(Core::System& system_, Memory::MemorySystem& memory,
                        PrivilegeMode initial_mode, u32 id,
                        std::shared_ptr<Core::Timing::Timer> timer)
-    : ARM_Interface(id, timer), system(system_) {
-    state = std::make_unique<ARMul_State>(system, memory, initial_mode);
+    : ARM_Interface(id, timer) {
+    environment = std::make_unique<SystemDynComEnvironment>(system_, memory);
+    state = std::make_unique<ARMul_State>(*environment, initial_mode);
 }
 
 ARM_DynCom::~ARM_DynCom() {}

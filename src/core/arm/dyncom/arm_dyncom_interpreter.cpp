@@ -14,6 +14,7 @@
 #include "common/logging/log.h"
 #include "common/microprofile.h"
 #include "core/arm/dyncom/arm_dyncom_dec.h"
+#include "core/arm/dyncom/arm_dyncom_environment.h"
 #include "core/arm/dyncom/arm_dyncom_interpreter.h"
 #include "core/arm/dyncom/arm_dyncom_run.h"
 #include "core/arm/dyncom/arm_dyncom_thumb.h"
@@ -21,13 +22,9 @@
 #include "core/arm/skyeye_common/armstate.h"
 #include "core/arm/skyeye_common/armsupp.h"
 #include "core/arm/skyeye_common/vfp/vfp.h"
-#include "core/core.h"
-#include "core/core_timing.h"
 #ifdef ENABLE_GDBSTUB
 #include "core/gdbstub/gdbstub.h"
 #endif
-#include "core/hle/kernel/svc.h"
-#include "core/memory.h"
 
 #define RM BITS(sht_oper, 0, 3)
 #define RS BITS(sht_oper, 8, 11)
@@ -816,7 +813,7 @@ MICROPROFILE_DEFINE(DynCom_Decode, "DynCom", "Decode", MP_RGB(255, 64, 64));
 static unsigned int InterpreterTranslateInstruction(const ARMul_State* cpu, const u32 phys_addr,
                                                     ARM_INST_PTR& inst_base) {
     u32 inst_size = 4;
-    u32 inst = cpu->memory.Read32(phys_addr & 0xFFFFFFFC);
+    u32 inst = cpu->ReadMemory32(phys_addr & 0xFFFFFFFC);
 
     // If we are in Thumb mode, we'll translate one Thumb instruction to the corresponding ARM
     // instruction
@@ -3871,11 +3868,11 @@ SUB_INST: {
 SWI_INST: {
     if (inst_base->cond == ConditionCode::AL || CondPassed(cpu, inst_base->cond)) {
         swi_inst* const inst_cream = (swi_inst*)inst_base->component;
-        cpu->system.GetRunningCore().GetTimer().AddTicks(num_instrs);
+        cpu->environment.AddTicks(num_instrs);
         cpu->NumInstrsToExecute =
             num_instrs >= cpu->NumInstrsToExecute ? 0 : cpu->NumInstrsToExecute - num_instrs;
         num_instrs = 0;
-        Kernel::SVCContext{cpu->system}.CallSVC(inst_cream->num & 0xFFFF);
+        cpu->environment.CallSVC(inst_cream->num & 0xFFFF);
         // The kernel would call ERET to get here, which clears exclusive memory state.
         cpu->UnsetExclusiveMemoryAddress();
     }
