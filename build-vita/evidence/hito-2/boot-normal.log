@@ -1,0 +1,15 @@
+[   0.007559] Core.ARM11 <Info> dyncom_main.cpp:main:152: dyncom_probe_version=02.00 platform=vita cache_bytes=2097152
+[   0.027769] Core.ARM11 <Info> dyncom_main.cpp:main:171: PASS logger backend=vita path=ux0:data/azahar-vita/boot.log
+[   0.056776] Core.ARM11 <Info> dyncom_main.cpp:main:180: PASS group=arm_alu_flags signature=0x2BE4CA19 instructions=7
+[   0.057138] Core.ARM11 <Info> dyncom_main.cpp:main:180: PASS group=arm_branch_call signature=0x943116C7 instructions=7
+[   0.057444] Core.ARM11 <Info> dyncom_main.cpp:main:180: PASS group=arm_memory signature=0x9FBC75EB instructions=6
+[   0.062956] Core.ARM11 <Info> dyncom_main.cpp:main:180: PASS group=thumb_alu_memory_svc signature=0x9195CC27 instructions=6
+[   0.066446] Core.ARM11 <Info> dyncom_main.cpp:main:180: PASS group=thumb_branches signature=0xF3AEB00D instructions=6
+[   0.069863] Core.ARM11 <Info> dyncom_main.cpp:main:180: PASS group=register_context signature=0x15CD60CB instructions=0
+[   0.073796] Core.ARM11 <Info> dyncom_main.cpp:main:180: PASS group=shared_memory_cores signature=0xDC5D3BEC instructions=2
+[   0.077653] Core.ARM11 <Info> dyncom_main.cpp:main:190: PASS memory bounds=clean
+[   0.101977] Core.ARM11 <Info> dyncom_main.cpp:main:204: PASS benchmark iterations=10000 instructions=30000 elapsed_us=20411 instructions_per_second=1469795
+[   0.107987] Core.ARM11 <Info> dyncom_main.cpp:main:213: PASS memory heap_used=21472 user_free_before=124780544 user_free_after=124780544 cdram_free_before=117440512 cdram_free_after=115343360
+[   1.211819] Core.ARM11 <Info> dyncom_main.cpp:main:238: PASS controller input=start
+[   1.228538] Core.ARM11 <Info> dyncom_main.cpp:main:243: PASS cleanup framebuffer=released
+[   1.234471] Core.ARM11 <Info> dyncom_main.cpp:main:244: RESULT PASS instructions=34

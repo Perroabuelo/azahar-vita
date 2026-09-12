@@ -56,8 +56,13 @@ PASS forbidden dependency symbol audit
 
 Physical Vita validation:
 PASS forced-failure path code=0xA2000001 result=FAIL
-PENDING normal six-band probe launched three times
-PENDING ARM and Thumb corpus signatures match desktop reference
-PENDING memory bounds, benchmark, controller, and cleanup
+PASS normal six-band probe launched three times
+PASS ARM and Thumb corpus signatures match desktop reference
+PASS memory bounds invalid_access=0
+PASS benchmark instructions=30000 elapsed_us=20411 instructions_per_second=1469795
+PASS user memory stable at 124780544 bytes before and after
+PASS controller input and framebuffer cleanup
+PASS final normal run result=PASS with no FAIL records
 
-Milestone 2: PENDING PHYSICAL VALIDATION
+Physical validation date: 2026-09-12
+Milestone 2: COMPLETE
