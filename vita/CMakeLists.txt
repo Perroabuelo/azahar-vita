@@ -15,7 +15,9 @@ include("${VITASDK}/share/vita.cmake" REQUIRED)
 
 set(VITA_APP_NAME "Azahar Vita Probe")
 set(VITA_TITLEID "AZHV00001")
-set(VITA_VERSION "00.01")
+set(VITA_VERSION "00.02")
+
+option(AZAHAR_VITA_PROBE_FORCE_FAILURE "Show and log the hardware probe failure path" OFF)
 
 add_executable(${PROJECT_NAME} src/main.cpp)
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_20)
@@ -23,8 +25,12 @@ target_compile_options(${PROJECT_NAME} PRIVATE
     -Wall
     -Wextra
     -Wpedantic
+    -Werror
     -O2
 )
+if(AZAHAR_VITA_PROBE_FORCE_FAILURE)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE AZAHAR_VITA_PROBE_FORCE_FAILURE=1)
+endif()
 target_link_libraries(${PROJECT_NAME} PRIVATE
     SceCtrl_stub
     SceDisplay_stub
