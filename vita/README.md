@@ -200,7 +200,10 @@ The VPK uses title ID `AZHV00003`, version `00.01`, and title
 4. Recover `ux0:data/azahar-vita/boot.log` and retain it with the forced log, desktop output, SDK
    version, commit, sizes, hashes, and validator output under `build-vita/evidence/hito-2`.
 
-Milestone 2 remains pending until this physical validation is complete.
+This validation was completed on 2026-09-12. The forced path produced `0xA2000001`, and the normal
+probe passed three consecutive launches with all seven desktop-reference signatures and no invalid
+memory access. The retained run reported stable user memory and 1,469,795 interpreted instructions
+per second before a clean exit through **START**.
 
 ## Porting order
 

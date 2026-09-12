@@ -36,7 +36,7 @@ La compatibilidad completa con el catálogo de 3DS no forma parte del alcance in
 | --- | --- | --- |
 | 0 | Sonda nativa instalada y validada en Vita | Completo |
 | 1 | Núcleo mínimo de Azahar compilando para ARMv7/Vita | Completo |
-| 2 | Intérprete ARM11 ejecutando pruebas deterministas | Pendiente |
+| 2 | Intérprete ARM11 ejecutando pruebas deterministas | Completo |
 | 3 | Loader, memoria y kernel HLE ejecutando homebrew sin video | Pendiente |
 | 4 | Presupuesto de memoria estable y medible | Pendiente |
 | 5 | Imagen correcta mediante renderizador de referencia | Pendiente |
@@ -342,9 +342,9 @@ contribuciones de la comunidad.
 
 ## Próximas acciones
 
-1. Preparar la prueba aislada del intérprete ARM DynCom para el Hito 2.
-2. Definir un corpus determinista de instrucciones ARM11 y sus resultados esperados.
-3. Medir el tamaño y la memoria iniciales del intérprete en Vita.
+1. Preparar una instancia mínima de loader, memoria y kernel HLE para el Hito 3.
+2. Definir un homebrew de 3DS pequeño y redistribuible como prueba de entrada sin video ni audio.
+3. Alcanzar su punto de entrada con diagnósticos reproducibles de carga, mapeo y servicios básicos.
 
 El primer gran objetivo demostrable será ejecutar correctamente un homebrew de 3DS con CPU,
 imagen, controles y logs. En ese punto el proyecto habrá pasado de ser una prueba de VitaSDK a un

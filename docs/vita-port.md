@@ -26,7 +26,7 @@ using its libretro frontend immediately would hide platform failures behind Retr
 - Azahar's dependency graph must be reduced; cross-compiling every desktop dependency is neither a
   useful nor realistic first milestone.
 
-## Current milestone
+## Milestone 2 closure
 
 Milestone 1 is complete when the reduced `citra_common` target builds for Vita, its native probe
 passes the deterministic utility, logger, timer, filesystem, serialization, and memory checks on
@@ -37,8 +37,10 @@ runs on desktop and Vita, uses bounds-checked flat memory, dispatches SVC throug
 checks shared memory between two emulated cores, and records a first instructions-per-second
 measurement. Loader and kernel HLE integration remain part of milestone 3.
 
-The implementation is not considered complete until the normal and forced-failure VPKs are
-validated on physical Vita hardware and their logs are retained as evidence.
+Physical validation was completed on 2026-09-12. The forced-failure VPK reported `0xA2000001`; the
+normal VPK passed three consecutive launches with all seven desktop-reference signatures, no
+invalid memory accesses, stable user memory, clean framebuffer release, and 1,469,795 interpreted
+instructions per second in the retained run.
 
 ## Validation status
 
@@ -53,3 +55,8 @@ The final run passed logger, common types, serialization, timer, filesystem, mem
 framebuffer cleanup checks without a `FAIL` record. Its dependency graph contains fmt in header-only
 mode and Boost headers; desktop frontends, network, audio, renderers, Crypto++, zstd, and compiled
 Boost libraries are not linked.
+
+Milestone 2 was completed on physical Vita hardware on 2026-09-12. ARM and Thumb execution matched
+the native desktop reference across arithmetic, flags, branches, calls, memory, isolated SVC
+dispatch, register state, and a shared-memory core handoff. The bounded memory environment reported
+no invalid access, and the first retained benchmark reached 1,469,795 instructions per second.
