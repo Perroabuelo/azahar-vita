@@ -1,0 +1,12 @@
+[   0.007612] Core.ARM11 <Info> system_main.cpp:main:164: system_probe_version=03.00 platform=vita
+[   0.036613] Core.ARM11 <Info> system_main.cpp:main:182: PASS logger backend=vita path=ux0:data/azahar-vita/boot.log
+[   2.858667] Kernel <Info> core/hle/kernel/process.cpp:~Process:704: Cleaning up process 11
+[   2.860107] Core.ARM11 <Info> system_main.cpp:main:196: PASS group=loader_identify signature=0x040C5B8C
+[   2.860450] Core.ARM11 <Info> system_main.cpp:main:196: PASS group=diagnostics signature=0x070C6045
+[   2.865263] Core.ARM11 <Info> system_main.cpp:main:196: PASS group=memory_and_process signature=0x040C5B8C
+[   2.868816] Core.ARM11 <Info> system_main.cpp:main:196: PASS group=entry_point signature=0x040C5B8C
+[   2.872247] Core.ARM11 <Info> system_main.cpp:main:196: PASS group=svc_and_service_ipc signature=0x30CCBD42
+[   2.875704] Core.ARM11 <Info> system_main.cpp:main:210: PASS memory heap_used=23632 user_free_before=57671680 user_free_after=57671680 cdram_free_before=117440512 cdram_free_after=115343360
+[   6.192275] Core.ARM11 <Info> system_main.cpp:main:235: PASS controller input=start
+[   6.208985] Core.ARM11 <Info> system_main.cpp:main:240: PASS cleanup framebuffer=released
+[   6.214921] Core.ARM11 <Info> system_main.cpp:main:241: RESULT PASS groups=5

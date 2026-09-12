@@ -20,10 +20,11 @@ Data: 12342 bytes
 BSS: 2388512 bytes
 Total: 3068950 bytes
 Translation cache: 2097152 bytes
+Newlib heap request: 201326592 bytes (192 MiB, via _newlib_heap_size_user; see below)
 
 Canonical system probe VPK:
 Path: build-vita/hito3-cmake/azahar_vita_system_probe.vpk
-SHA-256: 13581c25236f0b23ccf5cfc74233c302b269783b4ac55c72867b75e0930c590f
+SHA-256: 0f1f0de05d570fd677e293bd627ad7da72ec509b0978bb97febf5491def9fc88
 Title ID: AZHV00004
 App version: 00.01
 Title: Azahar Vita System Probe
@@ -57,6 +58,21 @@ PASS forbidden dependency symbol audit (Core::System, GDBStub::, PLGLDR::, Qt, V
 
 Physical Vita validation:
 PASS forced-failure path code=0xA3000001 result=FAIL
+PASS normal six-band probe launched three times
+PASS ARM and Thumb/loader/memory/kernel corpus signatures match desktop reference
+PASS memory heap_used=23632 user_free_before=57671680 user_free_after=57671680 (stable)
+PASS controller input and framebuffer cleanup
+PASS final normal run result=PASS with no FAIL records
 
-Physical validation date: 2026-09-12 (in progress)
-Milestone 3: IN PROGRESS - normal probe run pending
+Hardware finding: the first normal-probe attempt (before the fix below) crashed natively on every
+one of three launches, with no boot.log record beyond "PASS logger" - confirmed as three
+psp2core-*.psp2dmp crash dumps rather than a controlled failure. VitaSDK's newlib heap defaults to
+128 MiB; Memory::MemorySystem alone requests ~138.5 MiB (128 MiB FCRAM + 6 MiB VRAM + 4 MiB N3DS
+extra RAM + 0.5 MiB DSP RAM) via plain heap allocations, plus a ~5 MiB per-process page table, which
+exceeds that default. Fixed by defining `_newlib_heap_size_user = 192 MiB` in system_main.cpp (the
+documented VitaSDK mechanism for this, from share/gcc-arm-vita-eabi/samples/newlib_heapsize_ctrl -
+not the "system mode" MEMSIZE budget vita-make-fself also exposes, which is a different, unrelated
+knob). The VPK above already includes this fix; the SHA-256 differs from the one first installed.
+
+Physical validation date: 2026-09-12
+Milestone 3: COMPLETE
