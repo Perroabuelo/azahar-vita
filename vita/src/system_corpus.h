@@ -36,12 +36,17 @@ std::vector<u8> BuildTestHomebrew();
 /// reject, to exercise the loader's diagnostic path.
 std::vector<u8> BuildCorruptHomebrew();
 
-/// Runs the full loader -> memory -> kernel -> entry point -> SVC/IPC -> exit sequence against the
-/// real Memory::MemorySystem, Kernel::KernelSystem and Loader::Load3DSXImage, driven by a real
-/// Core::ARM_DynCom. Returns a report shared verbatim between the desktop reference and the Vita
-/// probe. `work_dir` (with a trailing separator if non-empty) is where the synthetic 3DSX images
-/// are written and then loaded back from; it defaults to the current directory, which is what the
-/// desktop reference wants, while the Vita probe passes its ux0:data/azahar-vita/hito-3/ directory.
+/// One full loader -> memory -> kernel -> entry point -> SVC/IPC -> exit cycle: builds its own
+/// Memory::MemorySystem, Kernel::KernelSystem and Core::ARM_DynCom from scratch and destroys them
+/// before returning. RunSystemCorpus (Hito 3) calls this once; Hito 4's budget corpus calls it
+/// several times in a row to check that the same inputs keep producing byte-identical results
+/// across independent construct/run/destroy cycles - a repeatable stand-in for "does not grow"
+/// that doesn't depend on any single host's allocator internals (see budget_corpus.cpp).
+SystemReport RunSystemCycle(const std::string& work_dir = "");
+
+/// Runs one RunSystemCycle() and returns it verbatim. Kept as a separate name (rather than having
+/// callers use RunSystemCycle directly) because "the Hito 3 system corpus" and "one repeatable
+/// cycle of it" are different concepts to a reader, even though Hito 4 added no new behavior here.
 SystemReport RunSystemCorpus(const std::string& work_dir = "");
 
 } // namespace Vita::SystemProbe

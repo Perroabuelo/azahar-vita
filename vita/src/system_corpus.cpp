@@ -330,7 +330,7 @@ bool SystemReport::Passed() const {
     return true;
 }
 
-SystemReport RunSystemCorpus(const std::string& work_dir) {
+SystemReport RunSystemCycle(const std::string& work_dir) {
     SystemReport report{};
     const std::string homebrew_path = work_dir + "hito3-homebrew.3dsx";
     const std::string corrupt_path = work_dir + "hito3-corrupt.3dsx";
@@ -448,6 +448,10 @@ SystemReport RunSystemCorpus(const std::string& work_dir) {
             debug_string_ok ? 1 : 0)};
 
     return report;
+}
+
+SystemReport RunSystemCorpus(const std::string& work_dir) {
+    return RunSystemCycle(work_dir);
 }
 
 } // namespace Vita::SystemProbe
