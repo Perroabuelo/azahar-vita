@@ -64,5 +64,8 @@ GIT-TAG
 
 # verify-release.sh downloads
 verify/
-# Vita out-of-tree build
-build-vita/
+# Vita out-of-tree build; retain physical validation evidence
+!build-vita/
+build-vita/*
+!build-vita/evidence/
+!build-vita/evidence/**

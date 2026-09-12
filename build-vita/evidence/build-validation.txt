@@ -1,0 +1,51 @@
+Azahar Vita milestone 0 build validation
+Date: 2026-09-11
+Git commit: a370d9696
+
+VitaSDK:
+Release   2026.08
+Sequence  2026091144
+Toolchain sdk-snapshot-20260825.611.1
+Packages  packages-2026.08-snapshot-20260911.41.1
+Installed 2026.08.1-1
+Compiler  GCC 15.2.0
+
+Canonical ELF:
+Path: build-vita/cmake/azahar_vita_probe
+Class: ELF32
+Machine: ARM
+Flags: Version5 EABI, hard-float ABI
+Text: 102468 bytes
+Data: 2548 bytes
+BSS: 285660 bytes
+Total: 390676 bytes
+
+Canonical VPK:
+Path: build-vita/cmake/azahar_vita_probe.vpk
+SHA-256: fd26bd100970fbaf0fc9ab3d565b7caa4a3096bc993d66576fc1a573eb9d1e6b
+Contents:
+- sce_sys/param.sfo (912 bytes)
+- eboot.bin (84245 bytes)
+
+Forced-failure VPK:
+Path: build-vita/failure/azahar_vita_probe.vpk
+SHA-256: e06eed0f0b66efd51dce663b54020d180080bec88ca47a927e22f3fcbb08db79
+
+Build matrix:
+PASS CMake normal
+PASS CMake forced failure
+PASS Make normal
+PASS Make forced failure
+
+Physical forced-failure validation:
+PASS alternating magenta/black bands
+PASS automatic exit after five seconds
+PASS expected forced-failure boot log
+
+Physical normal validation:
+PASS six complete horizontal color bands
+PASS START input and clean return to LiveArea
+PASS boot log contains all expected records and RESULT PASS
+Boot log SHA-256: 266ab9712d7f04758704a7f6e9735d8f9716e1dc94f58deb797ecdaa2a53bb96
+
+Milestone 0: COMPLETE

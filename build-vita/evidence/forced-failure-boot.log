@@ -1,0 +1,7 @@
+probe_version=00.02
+PASS log path=ux0:data/azahar-vita/boot.log
+PASS cxx20 standard=202002 pointer_bits=32 pattern_checksum=0x486CC51D
+PASS cdram bytes=2097152 alignment=262144
+PASS display width=960 height=544 pitch=960
+FAIL forced_failure code=0xA0000001
+RESULT FAIL
