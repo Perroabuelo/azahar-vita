@@ -1,0 +1,4 @@
+[   0.013438] Core.ARM11 <Info> dyncom_main.cpp:main:152: dyncom_probe_version=02.00 platform=vita cache_bytes=2097152
+[   0.038359] Core.ARM11 <Info> dyncom_main.cpp:main:171: PASS logger backend=vita path=ux0:data/azahar-vita/boot.log
+[   0.038683] Core.ARM11 <Error> dyncom_main.cpp:Fail:131: FAIL forced_failure code=0xA2000001
+[   0.038980] Core.ARM11 <Error> dyncom_main.cpp:Fail:132: RESULT FAIL

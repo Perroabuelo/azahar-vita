@@ -55,7 +55,7 @@ PASS DynCom symbols and 2 MiB translation cache
 PASS forbidden dependency symbol audit
 
 Physical Vita validation:
-PENDING forced-failure path code=0xA2000001
+PASS forced-failure path code=0xA2000001 result=FAIL
 PENDING normal six-band probe launched three times
 PENDING ARM and Thumb corpus signatures match desktop reference
 PENDING memory bounds, benchmark, controller, and cleanup
