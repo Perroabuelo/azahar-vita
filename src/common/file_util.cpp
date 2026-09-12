@@ -12,12 +12,14 @@
 #include <memory>
 #include <sstream>
 #include <unordered_map>
+#if !defined(AZAHAR_VITA)
 #include <boost/iostreams/device/file_descriptor.hpp>
 #include <boost/iostreams/stream.hpp>
-#include <cryptopp/aes.h>
-#include <cryptopp/modes.h>
+#endif
 #include <fmt/format.h>
+#if !defined(AZAHAR_VITA)
 #include "common/archives.h"
+#endif
 #include "common/assert.h"
 #include "common/common_funcs.h"
 #include "common/common_paths.h"
@@ -941,7 +943,15 @@ void SetUserPath(const std::string& path) {
         g_paths.emplace(UserPath::ConfigDir, user_path + CONFIG_DIR DIR_SEP);
         g_paths.emplace(UserPath::CacheDir, user_path + CACHE_DIR DIR_SEP);
     } else {
-#ifdef _WIN32
+#if defined(AZAHAR_VITA)
+        user_path = "ux0:data/azahar-vita/";
+        static_cast<void>(CreateFullPath(user_path));
+        g_paths.emplace(UserPath::RootDir, user_path);
+        g_paths.emplace(UserPath::ConfigDir, user_path + CONFIG_DIR DIR_SEP);
+        g_paths.emplace(UserPath::CacheDir, user_path + CACHE_DIR DIR_SEP);
+        // Keep the bring-up log in the stable location established by milestone 0.
+        g_paths.emplace(UserPath::LogDir, user_path);
+#elif defined(_WIN32)
         user_path = GetExeDirectory() + DIR_SEP USERDATA_DIR DIR_SEP;
         std::string& legacy_citra_user_path = g_paths[UserPath::LegacyCitraUserDir];
         std::string& legacy_lime3ds_user_path = g_paths[UserPath::LegacyLime3DSUserDir];
@@ -1644,6 +1654,7 @@ bool IOFile::Resize(u64 size) {
     return m_good;
 }
 
+#if !defined(AZAHAR_VITA)
 template <typename T>
 using boost_iostreams = boost::iostreams::stream<T>;
 
@@ -1674,6 +1685,9 @@ void OpenFStream<std::ios_base::out>(
     boost::iostreams::file_descriptor_sink file_descriptor_sink(fd, boost::iostreams::close_handle);
     fstream.open(file_descriptor_sink);
 }
+#endif
 } // namespace FileUtil
 
+#if !defined(AZAHAR_VITA)
 SERIALIZE_EXPORT_IMPL(FileUtil::IOFile)
+#endif

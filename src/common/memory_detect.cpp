@@ -24,7 +24,11 @@ namespace Common {
 const MemoryInfo GetMemInfo() {
     MemoryInfo mem_info{};
 
-#ifdef _WIN32
+#if defined(AZAHAR_VITA)
+    // The retail Vita hardware has 512 MiB of system RAM and no swap device.
+    mem_info.total_physical_memory = 512ULL * 1024 * 1024;
+    mem_info.total_swap_memory = 0;
+#elif defined(_WIN32)
     MEMORYSTATUSEX memorystatus;
     memorystatus.dwLength = sizeof(memorystatus);
     GlobalMemoryStatusEx(&memorystatus);
@@ -64,7 +68,9 @@ const MemoryInfo GetMemInfo() {
 }
 
 u64 GetPageSize() {
-#ifdef _WIN32
+#if defined(AZAHAR_VITA)
+    return 4096;
+#elif defined(_WIN32)
     SYSTEM_INFO info;
     ::GetSystemInfo(&info);
     return static_cast<u64>(info.dwPageSize);

@@ -107,6 +107,7 @@ namespace Common {
     return __sync_bool_compare_and_swap(pointer, expected, value);
 }
 
+#if defined(__SIZEOF_INT128__)
 [[nodiscard]] inline bool AtomicCompareAndSwap(volatile u64* pointer, u128 value, u128 expected) {
     unsigned __int128 value_a;
     unsigned __int128 expected_a;
@@ -114,6 +115,7 @@ namespace Common {
     std::memcpy(&expected_a, expected.data(), sizeof(u128));
     return __sync_bool_compare_and_swap((unsigned __int128*)pointer, expected_a, value_a);
 }
+#endif
 
 [[nodiscard]] inline bool AtomicCompareAndSwap(volatile u8* pointer, u8 value, u8 expected,
                                                u8& actual) {
@@ -139,6 +141,7 @@ namespace Common {
     return actual == expected;
 }
 
+#if defined(__SIZEOF_INT128__)
 [[nodiscard]] inline bool AtomicCompareAndSwap(volatile u64* pointer, u128 value, u128 expected,
                                                u128& actual) {
     unsigned __int128 value_a;
@@ -160,6 +163,7 @@ namespace Common {
     std::memcpy(result.data(), &result_a, sizeof(u128));
     return result;
 }
+#endif
 
 #endif
 

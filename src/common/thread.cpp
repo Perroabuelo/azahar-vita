@@ -94,6 +94,9 @@ void SetCurrentThreadName(const char* name) {
 void SetCurrentThreadName(const char* name) {
 #ifdef __APPLE__
     pthread_setname_np(name);
+#elif defined(AZAHAR_VITA)
+    // VitaSDK's pthread compatibility layer does not expose pthread_setname_np.
+    (void)name;
 #elif defined(__Bitrig__) || defined(__DragonFly__) || defined(__FreeBSD__) || defined(__OpenBSD__)
     pthread_set_name_np(pthread_self(), name);
 #elif defined(__NetBSD__)
