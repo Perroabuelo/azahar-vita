@@ -332,6 +332,9 @@ public:
     ThreadManager& GetCurrentThreadManager();
     const ThreadManager& GetCurrentThreadManager() const;
 
+    /// Number of emulated CPU cores this kernel was constructed with.
+    u32 GetNumCores() const;
+
     TimerManager& GetTimerManager();
     const TimerManager& GetTimerManager() const;
 

@@ -192,6 +192,10 @@ public:
         cpu = &cpu_;
     }
 
+    Core::ARM_Interface* GetCPU() const {
+        return cpu;
+    }
+
     void SetScheduleMode(Core1ScheduleMode mode);
 
     void UpdateAppCpuLimit();

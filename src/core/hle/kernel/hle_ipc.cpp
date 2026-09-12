@@ -11,13 +11,16 @@
 #include "common/archives.h"
 #include "common/assert.h"
 #include "common/common_types.h"
-#include "core/core.h"
 #include "core/hle/kernel/event.h"
 #include "core/hle/kernel/handle_table.h"
 #include "core/hle/kernel/hle_ipc.h"
 #include "core/hle/kernel/ipc_debugger/recorder.h"
 #include "core/hle/kernel/kernel.h"
 #include "core/hle/kernel/process.h"
+#if !defined(AZAHAR_VITA)
+// Only needed by the boost::serialization reconstruction hooks below.
+#include "core/core.h"
+#endif
 
 SERIALIZE_EXPORT_IMPL(Kernel::SessionRequestHandler)
 SERIALIZE_EXPORT_IMPL(Kernel::SessionRequestHandler::SessionDataBase)
@@ -125,7 +128,11 @@ std::shared_ptr<Event> HLERequestContext::SleepClientThread(
     return event;
 }
 
+#if !defined(AZAHAR_VITA)
+// Only reached by boost::serialization when reconstructing a HLERequestContext while loading a
+// savestate. Serialization is disabled on Vita, so this reconstruction hook is too.
 HLERequestContext::HLERequestContext() : kernel(Core::Global<KernelSystem>()) {}
+#endif
 
 HLERequestContext::HLERequestContext(KernelSystem& kernel, std::shared_ptr<ServerSession> session,
                                      std::shared_ptr<Thread> thread)
@@ -337,7 +344,11 @@ void HLERequestContext::serialize(Archive& ar, const unsigned int) {
 }
 SERIALIZE_IMPL(HLERequestContext)
 
+#if !defined(AZAHAR_VITA)
+// Only reached by boost::serialization when reconstructing a MappedBuffer while loading a
+// savestate. Serialization is disabled on Vita, so this reconstruction hook is too.
 MappedBuffer::MappedBuffer() : memory(&Core::Global<Core::System>().Memory()) {}
+#endif
 
 MappedBuffer::MappedBuffer(Memory::MemorySystem& memory, std::shared_ptr<Process> process,
                            u32 descriptor, VAddr address, u32 id)

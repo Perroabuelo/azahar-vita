@@ -15,19 +15,21 @@
 #include "common/common_funcs.h"
 #include "common/logging/log.h"
 #include "common/serialization/boost_vector.hpp"
-#include "core/core.h"
-#ifdef ENABLE_GDBSTUB
-#include "core/gdbstub/gdbstub.h"
-#endif
 #include "core/hle/kernel/errors.h"
 #include "core/hle/kernel/memory.h"
 #include "core/hle/kernel/process.h"
 #include "core/hle/kernel/resource_limit.h"
 #include "core/hle/kernel/thread.h"
 #include "core/hle/kernel/vm_manager.h"
-#include "core/hle/service/plgldr/plgldr.h"
-#include "core/loader/loader.h"
 #include "core/memory.h"
+#if !defined(AZAHAR_VITA)
+// The plugin loader and GDB stub are desktop-only; see the guards in Process::Run/Exit below.
+#include "core/core.h"
+#ifdef ENABLE_GDBSTUB
+#include "core/gdbstub/gdbstub.h"
+#endif
+#include "core/hle/service/plgldr/plgldr.h"
+#endif
 
 SERIALIZE_EXPORT_IMPL(Kernel::AddressMapping)
 SERIALIZE_EXPORT_IMPL(Kernel::Process)
@@ -123,7 +125,7 @@ void KernelSystem::TerminateProcess(std::shared_ptr<Process> process) {
     process->status = ProcessStatus::Exited;
 
     // Stop all process threads.
-    for (u32 core = 0; core < Core::GetNumCores(); core++) {
+    for (u32 core = 0; core < GetNumCores(); core++) {
         GetThreadManager(core).TerminateProcessThreads(process);
     }
 
@@ -254,16 +256,21 @@ void Process::Run(s32 main_thread_priority, u32 stack_size) {
         kernel.HandleSpecialMapping(vm_manager, mapping);
     }
 
+#if !defined(AZAHAR_VITA)
+    // The plugin loader and GDB stub are desktop-only debugging/modding facilities layered on top
+    // of the singleton Core::System; neither is part of the Vita port's scope.
     auto plgldr = Service::PLGLDR::GetService(Core::System::GetInstance());
     if (plgldr) {
         plgldr->OnProcessRun(*this, kernel);
     }
+#endif
 
     status = ProcessStatus::Running;
 
     vm_manager.LogLayout(Common::Log::Level::Debug);
     Kernel::SetupMainThread(kernel, codeset->entrypoint, main_thread_priority, SharedFrom(this));
 
+#if !defined(AZAHAR_VITA)
     // Pause process at start if flag enabled and we are not a sysmodule
     if (Core::System::GetInstance().GetDebugNextProcessFlag() &&
         resource_limit->GetCategory() != Kernel::ResourceLimitCategory::Other) {
@@ -275,9 +282,11 @@ void Process::Run(s32 main_thread_priority, u32 stack_size) {
 #endif
         Core::System::GetInstance().ClearDebugNextProcessFlag();
     }
+#endif
 }
 
 void Process::Exit() {
+#if !defined(AZAHAR_VITA)
 #ifdef ENABLE_GDBSTUB
     GDBStub::OnProcessExit(process_id);
 #endif
@@ -286,6 +295,7 @@ void Process::Exit() {
     if (plgldr) {
         plgldr->OnProcessExit(*this, kernel);
     }
+#endif
 }
 
 VAddr Process::GetLinearHeapAreaAddress() const {
@@ -613,7 +623,7 @@ Result Process::Unmap(VAddr target, VAddr source, u32 size, VMAPermission perms,
 
 std::vector<std::shared_ptr<Kernel::Thread>> Kernel::Process::GetThreadList() {
     std::vector<std::shared_ptr<Kernel::Thread>> ret;
-    for (u32 core = 0; core < Core::GetNumCores(); core++) {
+    for (u32 core = 0; core < kernel.GetNumCores(); core++) {
         auto thread_list = kernel.GetThreadManager(core).GetThreadList();
         for (auto& thread : thread_list) {
             if (thread->owner_process.lock().get() == this) {
@@ -641,8 +651,10 @@ void Kernel::Process::ChangeUnscheduleMode(UnscheduleMode mode, std::vector<u32>
     }
 
     if (needs_reschedule) {
-        for (u32 i = 0; i < Core::GetNumCores(); i++) {
-            Core::GetCore(i).PrepareReschedule();
+        for (u32 i = 0; i < kernel.GetNumCores(); i++) {
+            if (Core::ARM_Interface* cpu = kernel.GetThreadManager(i).GetCPU()) {
+                cpu->PrepareReschedule();
+            }
             kernel.GetThreadManager(i).Reschedule();
         }
     }

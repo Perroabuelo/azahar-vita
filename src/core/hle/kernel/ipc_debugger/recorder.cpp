@@ -12,7 +12,11 @@
 #include "core/hle/kernel/server_session.h"
 #include "core/hle/kernel/session.h"
 #include "core/hle/kernel/thread.h"
+#if !defined(AZAHAR_VITA)
+// Only needed to resolve the IPC function name for the debugger UI. The full Service:: hierarchy
+// (and, transitively, every service module) is not linked on Vita, so that lookup is skipped there.
 #include "core/hle/service/service.h"
+#endif
 
 namespace IPCDebugger {
 
@@ -94,6 +98,7 @@ void Recorder::SetRequestInfo(const std::shared_ptr<Kernel::Thread>& client_thre
 
     // Function name
     ASSERT_MSG(client_session_map.count(thread_id), "Client session is missing");
+#if !defined(AZAHAR_VITA)
     const auto& client_session = client_session_map[thread_id];
     if (client_session->parent->port &&
         client_session->parent->port->GetServerPort()->hle_handler) {
@@ -102,6 +107,7 @@ void Recorder::SetRequestInfo(const std::shared_ptr<Kernel::Thread>& client_thre
                                    client_session->parent->port->GetServerPort()->hle_handler)
                                    ->GetFunctionName({record.untranslated_request_cmdbuf[0]});
     }
+#endif
     client_session_map.erase(thread_id);
 
     InvokeCallbacks(record);

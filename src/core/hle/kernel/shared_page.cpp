@@ -9,14 +9,19 @@
 #include "common/archives.h"
 #include "common/assert.h"
 #include "common/settings.h"
-#include "core/core.h"
 #include "core/core_timing.h"
 #include "core/hle/kernel/shared_page.h"
 #include "core/hle/service/ptm/ptm.h"
+#if !defined(AZAHAR_VITA)
+#include "core/core.h"
 #include "core/movie.h"
+#endif
 
 SERIALIZE_EXPORT_IMPL(SharedPage::Handler)
 
+#if !defined(AZAHAR_VITA)
+// Only reached by boost::serialization when reconstructing a SharedPage::Handler while loading a
+// savestate. Serialization is disabled on Vita, so this reconstruction hook is too.
 namespace boost::serialization {
 
 template <class Archive>
@@ -28,6 +33,7 @@ template void load_construct_data<iarchive>(iarchive& ar, SharedPage::Handler* t
                                             const unsigned int);
 
 } // namespace boost::serialization
+#endif
 
 namespace SharedPage {
 

@@ -9,11 +9,13 @@
 #include <boost/serialization/split_member.hpp>
 #include "common/archives.h"
 #include "common/assert.h"
-#include "core/core.h"
 #include "core/hle/kernel/errors.h"
 #include "core/hle/kernel/vm_manager.h"
-#include "core/hle/service/plgldr/plgldr.h"
 #include "core/memory.h"
+#if !defined(AZAHAR_VITA)
+#include "core/core.h"
+#include "core/hle/service/plgldr/plgldr.h"
+#endif
 
 SERIALIZE_EXPORT_IMPL(Kernel::VirtualMemoryArea)
 
@@ -371,9 +373,13 @@ void VMManager::UpdatePageTableForVMA(const VirtualMemoryArea& vma) {
         break;
     }
 
+#if !defined(AZAHAR_VITA)
+    // The plugin loader is a desktop-only modding facility layered on top of the singleton
+    // Core::System; it is not part of the Vita port's scope.
     auto plgldr = Service::PLGLDR::GetService(Core::System::GetInstance());
     if (plgldr)
         plgldr->OnMemoryChanged(process, Core::System::GetInstance().Kernel());
+#endif
 }
 
 ResultVal<std::vector<std::pair<MemoryRef, u32>>> VMManager::GetBackingBlocksForRange(VAddr address,

@@ -63,6 +63,10 @@ u32 KernelSystem::GenerateObjectID() {
     return next_object_id++;
 }
 
+u32 KernelSystem::GetNumCores() const {
+    return static_cast<u32>(thread_managers.size());
+}
+
 std::shared_ptr<Process> KernelSystem::GetCurrentProcess() const {
     return current_process;
 }

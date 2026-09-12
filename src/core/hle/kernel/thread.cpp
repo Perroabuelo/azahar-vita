@@ -16,7 +16,6 @@
 #include "common/settings.h"
 #include "core/arm/arm_interface.h"
 #include "core/arm/skyeye_common/armstate.h"
-#include "core/core.h"
 #ifdef ENABLE_GDBSTUB
 #include "core/gdbstub/gdbstub.h"
 #endif
@@ -748,7 +747,7 @@ void ThreadManager::UpdateAppCpuLimit() {
 }
 
 std::shared_ptr<Thread> KernelSystem::GetThreadByID(u32 thread_id) const {
-    for (u32 core_id = 0; core_id < Core::System::GetInstance().GetNumCores(); core_id++) {
+    for (u32 core_id = 0; core_id < GetNumCores(); core_id++) {
         auto ret = GetThreadManager(core_id).GetThreadByID(thread_id);
         if (ret) {
             return ret;
