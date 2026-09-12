@@ -10,13 +10,19 @@
 #include "core/arm/dyncom/arm_dyncom_interpreter.h"
 #include "core/arm/dyncom/arm_dyncom_trans.h"
 #include "core/arm/skyeye_common/armstate.h"
-#include "core/core.h"
 #include "core/core_timing.h"
-#include "core/hle/kernel/svc.h"
 #include "core/memory.h"
+#if !defined(AZAHAR_VITA)
+// Only needed by SystemDynComEnvironment below, the adapter used by the Core::System-based
+// constructor. The Vita port drives ARM_DynCom from its own DynComEnvironment instead (see
+// arm_dyncom.h), so neither Core::System nor the real Kernel::SVC dispatch table is linked there.
+#include "core/core.h"
+#include "core/hle/kernel/svc.h"
+#endif
 
 namespace Core {
 
+#if !defined(AZAHAR_VITA)
 namespace {
 
 class SystemDynComEnvironment final : public DynComEnvironment {
@@ -74,10 +80,14 @@ private:
 ARM_DynCom::ARM_DynCom(Core::System& system_, Memory::MemorySystem& memory,
                        PrivilegeMode initial_mode, u32 id,
                        std::shared_ptr<Core::Timing::Timer> timer)
-    : ARM_Interface(id, timer) {
-    environment = std::make_unique<SystemDynComEnvironment>(system_, memory);
-    state = std::make_unique<ARMul_State>(*environment, initial_mode);
-}
+    : ARM_Interface(id, timer),
+      owned_environment(std::make_unique<SystemDynComEnvironment>(system_, memory)),
+      state(std::make_unique<ARMul_State>(*owned_environment, initial_mode)) {}
+#endif // !defined(AZAHAR_VITA)
+
+ARM_DynCom::ARM_DynCom(Core::DynComEnvironment& environment, PrivilegeMode initial_mode, u32 id,
+                       std::shared_ptr<Core::Timing::Timer> timer)
+    : ARM_Interface(id, timer), state(std::make_unique<ARMul_State>(environment, initial_mode)) {}
 
 ARM_DynCom::~ARM_DynCom() {}
 

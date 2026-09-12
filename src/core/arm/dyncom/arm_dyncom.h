@@ -24,6 +24,11 @@ public:
     explicit ARM_DynCom(Core::System& system, Memory::MemorySystem& memory,
                         PrivilegeMode initial_mode, u32 id,
                         std::shared_ptr<Core::Timing::Timer> timer);
+    // Drives the interpreter directly over a caller-owned DynComEnvironment, without a
+    // Core::System. Used by harnesses (such as the Vita port) that need a real ARM_Interface -
+    // e.g. to participate in Kernel::ThreadManager scheduling - without the rest of Core::System.
+    explicit ARM_DynCom(Core::DynComEnvironment& environment, PrivilegeMode initial_mode, u32 id,
+                        std::shared_ptr<Core::Timing::Timer> timer);
     ~ARM_DynCom() override;
 
     void Run() override;
@@ -62,7 +67,9 @@ protected:
 private:
     void ExecuteInstructions(u64 num_instructions);
 
-    std::unique_ptr<DynComEnvironment> environment;
+    // Declared before state so it is constructed first when the Core::System overload is used;
+    // null when constructed directly from a caller-owned DynComEnvironment.
+    std::unique_ptr<DynComEnvironment> owned_environment;
     std::unique_ptr<ARMul_State> state;
 };
 
