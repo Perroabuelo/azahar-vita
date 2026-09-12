@@ -74,7 +74,13 @@ if grep -Eiq "${banned_regex_ci}" <<<"${symbols}" || grep -Eq "${banned_regex_cs
     exit 1
 fi
 
-host_output="$("${host_probe}" 2>/dev/null)"
+# Run with the probe's own directory as CWD: RunGuestFrameGroup writes hito5-top.ppm/
+# hito5-bottom.ppm as a side effect (see render_corpus.cpp) to whatever the current directory is,
+# and vita/README.md documents them landing next to the binary - they must not scatter into
+# wherever this script itself happened to be invoked from.
+host_probe_dir="$(cd "$(dirname "${host_probe}")" && pwd)"
+host_probe_name="$(basename "${host_probe}")"
+host_output="$(cd "${host_probe_dir}" && "./${host_probe_name}" 2>/dev/null)"
 grep -q '^PASS group=renderer_init ' <<<"${host_output}"
 grep -q '^PASS group=color_fill ' <<<"${host_output}"
 grep -q '^PASS group=framebuffer_formats ' <<<"${host_output}"
@@ -88,7 +94,6 @@ grep -q '^RESULT PASS groups=7$' <<<"${host_output}"
 # side effect of the run above (RunGuestFrameGroup - see render_corpus.cpp). Their hashes are what
 # the recovered Vita captures (ux0:data/azahar-vita/hito-5/hito5-{top,bottom}.ppm) must match - see
 # vita/README.md's Hito 5 physical validation section.
-host_probe_dir="$(dirname "${host_probe}")"
 if [[ ! -f "${host_probe_dir}/hito5-top.ppm" || ! -f "${host_probe_dir}/hito5-bottom.ppm" ]]; then
     echo 'FAIL desktop reference did not produce hito5-top.ppm/hito5-bottom.ppm' >&2
     exit 1
