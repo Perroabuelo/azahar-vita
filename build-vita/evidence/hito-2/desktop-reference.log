@@ -1,0 +1,11 @@
+dyncom_probe_version=02.00 platform=desktop
+PASS group=arm_alu_flags signature=0x2BE4CA19 instructions=7
+PASS group=arm_branch_call signature=0x943116C7 instructions=7
+PASS group=arm_memory signature=0x9FBC75EB instructions=6
+PASS group=thumb_alu_memory_svc signature=0x9195CC27 instructions=6
+PASS group=thumb_branches signature=0xF3AEB00D instructions=6
+PASS group=register_context signature=0x15CD60CB instructions=0
+PASS group=shared_memory_cores signature=0xDC5D3BEC instructions=2
+PASS memory bounds=clean
+PASS benchmark instructions=30000 final=10000
+RESULT PASS instructions=34

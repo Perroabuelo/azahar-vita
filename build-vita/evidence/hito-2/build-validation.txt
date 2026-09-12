@@ -1,0 +1,63 @@
+Azahar Vita milestone 2 host build validation
+Date: 2026-09-12
+Git commit: 09e32ae678c8e264110fd37dab17d54e79266f40
+
+VitaSDK:
+Release   2026.08
+Sequence  2026091144
+Toolchain sdk-snapshot-20260825.611.1
+Packages  packages-2026.08-snapshot-20260911.41.1
+Installed 2026.08.1-1
+Compiler GCC 15.2.0
+
+Canonical DynCom probe ELF:
+Path: build-vita/hito2-cmake/azahar_vita_dyncom_probe
+Class: ELF32
+Machine: ARM
+Flags: Version5 EABI, hard-float ABI
+Text: 562040 bytes
+Data: 5382 bytes
+BSS: 2387408 bytes
+Total: 2954830 bytes
+Translation cache: 2097152 bytes
+
+Canonical DynCom probe VPK:
+Path: build-vita/hito2-cmake/azahar_vita_dyncom_probe.vpk
+SHA-256: 1b208930cfe4f7ce39166a85d22d2190c6972b273a2879f836cdd6783ecb2f2d
+Title ID: AZHV00003
+App version: 00.01
+Title: Azahar Vita DynCom Probe
+Contents:
+- sce_sys/param.sfo
+- eboot.bin
+
+Forced-failure DynCom probe:
+Path: build-vita/hito2-failure/azahar_vita_dyncom_probe.vpk
+Text: 464624 bytes
+Data: 4758 bytes
+BSS: 290256 bytes
+Total: 759638 bytes
+SHA-256: 22e359ad54937ca10456adf37dd072b16c3dd156b402b9b52f99354bde5ffd72
+
+Host validation:
+PASS desktop DynCom reference groups=7 instructions=34
+PASS ARM arithmetic, logic, flags, branches, calls, and memory
+PASS Thumb arithmetic, branches, memory, and isolated SVC callback
+PASS register context and shared-memory core handoff
+PASS bounded memory invalid_access=0
+PASS benchmark instructions=30000 final=10000
+PASS CMake normal Vita build
+PASS CMake forced-failure Vita build
+PASS retained milestone 1 CMake build
+PASS ELF32 ARM hard-float inspection
+PASS VPK contents and SFO metadata
+PASS DynCom symbols and 2 MiB translation cache
+PASS forbidden dependency symbol audit
+
+Physical Vita validation:
+PENDING forced-failure path code=0xA2000001
+PENDING normal six-band probe launched three times
+PENDING ARM and Thumb corpus signatures match desktop reference
+PENDING memory bounds, benchmark, controller, and cleanup
+
+Milestone 2: PENDING PHYSICAL VALIDATION
