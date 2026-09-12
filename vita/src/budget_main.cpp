@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
-#include <cstring>
 #include <malloc.h>
 #include <span>
 
@@ -18,22 +17,32 @@
 #include "common/file_util.h"
 #include "common/logging/backend.h"
 #include "common/logging/log.h"
-#include "core/memory.h"
-#include "core/memory_environment.h"
 
 // See system_main.cpp for the newlib heap background. Hito 3 needed 192 MiB because FCRAM, VRAM,
 // DSP RAM and 4 MiB of New 3DS extra RAM all landed in this same heap. Hito 4 removes the N3DS
-// allocation entirely (see core/memory.cpp's N3DS_EXTRA_RAM_ALLOCATED_SIZE) and demonstrates that
-// the other three *can* live in their own named sceKernelAllocMemBlock allocations instead (see
-// MemblockEnvironment below) - but the deterministic corpus shared with the desktop reference
-// (budget_corpus.cpp) still constructs its own Memory::MemorySystem instances through the portable,
-// heap-based default environment, exactly as the Hito 2/3 corpora do, so its results stay
-// comparable to the desktop build bit for bit. That means this probe's own peak heap need is still
-// close to a full ~134.5 MiB (FCRAM+VRAM+DSP) plus the ~5 MiB page table and kernel object
-// overhead a loaded homebrew adds - not the dramatically smaller figure a fully memblock-backed
-// production system could reach. 160 MiB (down from 192 MiB) is what the N3DS removal and a
-// re-measured margin actually support today; a further reduction needs the corpus itself to run
-// over a memblock-backed environment, which is future work (see docs/vita-port.md).
+// allocation entirely (see core/memory.cpp's N3DS_EXTRA_RAM_ALLOCATED_SIZE), but the deterministic
+// corpus shared with the desktop reference (budget_corpus.cpp) still constructs its own
+// Memory::MemorySystem instances through the portable, heap-based default environment, exactly as
+// the Hito 2/3 corpora do, so its results stay comparable to the desktop build bit for bit. That
+// means this probe's peak heap need is still close to a full ~134.5 MiB (FCRAM+VRAM+DSP) plus the
+// ~5 MiB page table and kernel object overhead a loaded homebrew adds.
+//
+// _newlib_heap_size_user reserves this size as ONE sceKernelAllocMemBlock the moment the process
+// starts, for its entire lifetime, whether or not anything has actually been malloc'd from it yet
+// - it is not a lazily-grown limit. An earlier version of this probe additionally built a second,
+// separate Memory::MemorySystem over a real sceKernelAllocMemBlock-backed environment (to
+// demonstrate the "separate the allocations" requirement live), on the mistaken assumption that
+// its ~134.5 MiB request would not overlap the heap's own reservation. It does: hardware testing
+// on 2026-09-12 found that a 160 MiB heap plus that demonstration's extra ~134.5 MiB request
+// exceeded the Vita's ~247 MiB user-RAM pool, and the single largest request (128 MiB FCRAM) was
+// the one the kernel refused (SCE_KERNEL_ERROR_NO_FREE_PHYSICAL_PAGE, 0x80024302) - caught cleanly
+// by the same IsInitialized()/GetFailedItem() seam this milestone added, not a crash, but wrong
+// nonetheless. The demonstration was removed rather than shrinking the heap further, since the
+// corpus's own heap-based Memory::MemorySystem instances (region_accounting, oom_recovery,
+// load_release_cycles) already need close to this much heap by themselves; running the real
+// sceKernelAllocMemBlock path for FCRAM/VRAM/DSP *instead of* the corpus's heap-based one (so the
+// two are never both reserved at once) is future work, same as the follow-up already noted for
+// bringing the corpus's own footprint down (see docs/vita-port.md).
 extern "C" {
 unsigned int _newlib_heap_size_user = SCE_KERNEL_128MiB + SCE_KERNEL_32MiB;
 }
@@ -51,7 +60,6 @@ constexpr unsigned int FailureDisplayTimeMicroseconds = 5'000'000;
 constexpr const char* ProbeVersion = "04.00";
 constexpr const char* LogPath = "ux0:data/azahar-vita/boot.log";
 constexpr const char* WorkDir = "ux0:data/azahar-vita/hito-4/";
-constexpr std::size_t MemblockAlignment = 4096;
 
 constexpr std::array<std::uint32_t, 6> SuccessColors{
     0xFF202020, 0xFF2774E6, 0xFF2ECC71, 0xFFF1C40F, 0xFFE67E22, 0xFFE74C3C,
@@ -76,93 +84,6 @@ MemorySnapshot CaptureMemory() {
     snapshot.heap = mallinfo();
     return snapshot;
 }
-
-/// Gives each of MemorySystem's large backing regions its own named, individually freeable
-/// sceKernelAllocMemBlock instead of folding all of them into the newlib heap. This is the
-/// hardware demonstration of Hito 4's "separate the allocations" requirement: it is deliberately
-/// kept out of the deterministic corpus (budget_corpus.cpp), which needs a portable, heap-based
-/// environment to stay comparable to the desktop reference bit for bit (see the heap comment
-/// above) - this class only proves and measures the real allocation path, logged, never signed.
-class MemblockEnvironment final : public Core::MemoryEnvironment {
-public:
-    bool IsPoweredOn() const override {
-        return true;
-    }
-    VAddr GetRunningCorePC() const override {
-        return 0;
-    }
-    std::shared_ptr<Kernel::Process> GetCurrentProcess() const override {
-        return nullptr;
-    }
-    void FlushRegion(PAddr, u32) override {}
-    void InvalidateRegion(PAddr, u32) override {}
-    void FlushAndInvalidateRegion(PAddr, u32) override {}
-    u32 ReadIoRegister32(VAddr) override {
-        return 0;
-    }
-    void WriteIoRegister32(VAddr, u32) override {}
-    void LogUnmappedAccess(Core::ExceptionType) override {}
-
-    u8* AllocateBackingMemory(Memory::Region region, std::size_t size) override {
-        const char* name = NameFor(region);
-        const std::size_t aligned_size =
-            (size + MemblockAlignment - 1) / MemblockAlignment * MemblockAlignment;
-        const SceUID uid = sceKernelAllocMemBlock(name, SCE_KERNEL_MEMBLOCK_TYPE_USER_RW,
-                                                  static_cast<SceSize>(aligned_size), nullptr);
-        if (uid < 0) {
-            LOG_ERROR(Core_ARM11, "FAIL memory_block name={} bytes={} code=0x{:08X}", name, size,
-                      static_cast<std::uint32_t>(uid));
-            return nullptr;
-        }
-        void* base = nullptr;
-        const int result = sceKernelGetMemBlockBase(uid, &base);
-        if (result < 0 || base == nullptr) {
-            LOG_ERROR(Core_ARM11, "FAIL memory_block_base name={} code=0x{:08X}", name,
-                      static_cast<std::uint32_t>(result));
-            sceKernelFreeMemBlock(uid);
-            return nullptr;
-        }
-        // sceKernelAllocMemBlock does not zero-initialize; MemorySystem relies on FCRAM/VRAM/DSP
-        // reading back as zero (see Core::MemoryEnvironment::AllocateBackingMemory's contract).
-        std::memset(base, 0, size);
-        uids[IndexFor(region)] = uid;
-        LOG_INFO(Core_ARM11, "PASS memory_block name={} uid=0x{:08X} bytes={}", name,
-                 static_cast<std::uint32_t>(uid), size);
-        return static_cast<u8*>(base);
-    }
-
-    void FreeBackingMemory(Memory::Region region, u8* data, std::size_t) override {
-        if (data == nullptr) {
-            return;
-        }
-        SceUID& uid = uids[IndexFor(region)];
-        if (uid >= 0) {
-            sceKernelFreeMemBlock(uid);
-            uid = -1;
-        }
-    }
-
-private:
-    static std::size_t IndexFor(Memory::Region region) {
-        return static_cast<std::size_t>(region);
-    }
-
-    static const char* NameFor(Memory::Region region) {
-        switch (region) {
-        case Memory::Region::FCRAM:
-            return "azahar-fcram";
-        case Memory::Region::VRAM:
-            return "azahar-vram";
-        case Memory::Region::DSP:
-            return "azahar-dsp";
-        case Memory::Region::N3DS:
-            return "azahar-n3ds";
-        }
-        return "azahar-unknown";
-    }
-
-    std::array<SceUID, 4> uids{-1, -1, -1, -1};
-};
 
 class Framebuffer {
 public:
@@ -235,6 +156,16 @@ private:
     bool presented{};
 };
 
+// A single load_release_cycles cycle repeats the whole Hito 3 sequence and is measurably slow on
+// real hardware (~2.85 s in the retained Hito 3 evidence, dominated by zeroing ~134.5 MiB), with
+// nothing to show for it on screen in the meantime. This gives that group somewhere to report
+// progress to, so a run that is just slow is distinguishable in boot.log from one that is stuck:
+// physical testing on 2026-09-12 found the probe unresponsive to START for long enough to look
+// hung, and the recovered log had stopped at "PASS logger" with no further record at all.
+void LogCycleProgress(int cycle_index) {
+    LOG_INFO(Core_ARM11, "PASS memory_cycle_progress cycle={}", cycle_index);
+}
+
 int Fail(Framebuffer* framebuffer, const char* stage, int error) {
     LOG_ERROR(Core_ARM11, "FAIL {} code=0x{:08X}", stage, static_cast<std::uint32_t>(error));
     LOG_ERROR(Core_ARM11, "RESULT FAIL");
@@ -285,25 +216,24 @@ int main() {
     return Fail(&framebuffer, "forced_failure", static_cast<int>(0xA4000001U));
 #endif
 
-    // Hardware demonstration of the separated, named memblock allocation path (see
-    // MemblockEnvironment above). Scoped so its ~134.5 MiB of memblocks are fully released before
-    // the corpus below builds its own (heap-based) Memory::MemorySystem instances.
-    {
-        MemblockEnvironment environment;
-        Memory::MemorySystem memory(environment);
-        if (!memory.IsInitialized()) {
-            const auto failed_item = memory.GetFailedItem();
-            return Fail(&framebuffer, "memory_regions", failed_item ? static_cast<int>(*failed_item) : -1);
-        }
-        LOG_INFO(Core_ARM11,
-                 "PASS memory_regions fcram={} vram={} dsp={} n3ds={} total={}",
-                 memory.GetAllocatedBytes(Memory::Region::FCRAM),
-                 memory.GetAllocatedBytes(Memory::Region::VRAM),
-                 memory.GetAllocatedBytes(Memory::Region::DSP),
-                 memory.GetAllocatedBytes(Memory::Region::N3DS), memory.GetTotalAllocatedBytes());
-    }
+    // Calls the same five groups RunBudgetCorpus (used by the desktop reference) runs, but one at a
+    // time with a progress line logged immediately after each - see LogCycleProgress's comment for
+    // why. Each LOG_INFO here is flushed to boot.log as soon as it's written (see
+    // common/logging/backend_vita.cpp), so if a run ever again looks stuck, the recovered log shows
+    // exactly how far it got instead of stopping at "PASS logger".
+    Vita::BudgetProbe::BudgetReport report{};
+    report.groups[report.group_count++] = Vita::BudgetProbe::RunBudgetPlanGroup();
+    LOG_INFO(Core_ARM11, "PASS memory_progress group=budget_plan");
+    report.groups[report.group_count++] = Vita::BudgetProbe::RunRegionAccountingGroup();
+    LOG_INFO(Core_ARM11, "PASS memory_progress group=region_accounting");
+    report.groups[report.group_count++] = Vita::BudgetProbe::RunOomRecoveryGroup();
+    LOG_INFO(Core_ARM11, "PASS memory_progress group=oom_recovery");
+    report.groups[report.group_count++] =
+        Vita::BudgetProbe::RunLoadReleaseCyclesGroup(WorkDir, &LogCycleProgress);
+    LOG_INFO(Core_ARM11, "PASS memory_progress group=load_release_cycles");
+    report.groups[report.group_count++] = Vita::BudgetProbe::RunRendererHeadroomGroup();
+    LOG_INFO(Core_ARM11, "PASS memory_progress group=renderer_headroom");
 
-    const Vita::BudgetProbe::BudgetReport report = Vita::BudgetProbe::RunBudgetCorpus(WorkDir);
     for (std::size_t i = 0; i < report.group_count; ++i) {
         const auto& group = report.groups[i];
         if (group.passed) {

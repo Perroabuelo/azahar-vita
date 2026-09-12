@@ -284,11 +284,20 @@ The deterministic corpus (`budget_plan`, `region_accounting`, `oom_recovery`,
 like Hitos 2 and 3; `load_release_cycles` repeats the Hito 3 loader/memory/kernel sequence three
 independent times via `Vita::SystemProbe::RunSystemCycle` (a small refactor of `RunSystemCorpus`
 that changes no Hito 3 behavior or signature) and checks the three runs produce byte-identical
-results. The Vita probe additionally builds one extra, unsigned `Memory::MemorySystem` over a
-`MemblockEnvironment` that gives FCRAM, VRAM and DSP RAM their own named
-`sceKernelAllocMemBlock` allocations - the hardware demonstration of "separate the allocations" -
-logged but kept out of the signed corpus, since the corpus must stay comparable to the desktop
-reference bit for bit and the desktop build has no such thing to compare against.
+results.
+
+An earlier version of this probe additionally built a second, unsigned `Memory::MemorySystem` over
+a `sceKernelAllocMemBlock`-backed environment before running the corpus, to demonstrate "separate
+the allocations by subsystem" live on hardware. Physical testing found this does not fit the
+platform's memory budget: `_newlib_heap_size_user` reserves its full size as one memblock the
+moment the process starts, for the process's whole lifetime, not lazily - so a 160 MiB heap plus
+that demonstration's own ~134.5 MiB request needed ~294.5 MiB against the Vita's ~247 MiB user-RAM
+pool. The 128 MiB FCRAM request was the one refused (`SCE_KERNEL_ERROR_NO_FREE_PHYSICAL_PAGE`,
+`0x80024302`), caught cleanly by this same milestone's `IsInitialized()`/`GetFailedItem()` seam
+(a `FAIL memory_regions`/`RESULT FAIL`, not a crash) rather than a silent failure - but it was still
+the wrong design, and the demonstration was removed rather than shrinking the heap further, since
+the corpus's own heap-based `Memory::MemorySystem` instances already need close to the full heap by
+themselves. See `docs/vita-port.md` for the follow-up this implies.
 
 Build and run the desktop reference first:
 
@@ -322,23 +331,30 @@ The VPK uses title ID `AZHV00005`, version `00.01`, and title
 1. Install `build-vita/hito4-failure/azahar_vita_budget_probe.vpk`. It must show alternating
    magenta/black bands, log `FAIL forced_failure code=0xA4000001` and `RESULT FAIL`, then exit
    after five seconds.
-2. Install `build-vita/hito4-cmake/azahar_vita_budget_probe.vpk`. It must show six color bands and
-   remain responsive until **START** is pressed.
-3. Launch the normal probe three times. Every run must contain a `PASS memory_regions` record for
-   the real memblock allocation, five `PASS group=` records (`budget_plan`, `region_accounting`,
-   `oom_recovery`, `load_release_cycles`, `renderer_headroom`) with the same signatures as the
-   desktop reference, a `PASS memory` record with heap/user/CDRAM/phycont figures, and
-   `RESULT PASS groups=5` without any `FAIL` record.
+2. Install `build-vita/hito4-cmake/azahar_vita_budget_probe.vpk`. It must show six color bands, then
+   **take several seconds before responding to START** - unlike every earlier milestone's probe,
+   this one runs several real, full-sized `Memory::MemorySystem` constructions (up to two full
+   repeats of the Hito 3 sequence in `load_release_cycles` alone) before it ever reads the
+   controller, and each one is measurably slow on real hardware (~2.85 s per Hito-3-equivalent
+   cycle, per the retained Hito 3 evidence, dominated by zeroing the ~134.5 MiB it allocates). This
+   is expected; give it time rather than assuming it is stuck. If in doubt, wait at least 15-20
+   seconds before deciding it is unresponsive.
+3. Launch the normal probe three times. Every run must contain five `PASS group=` records
+   (`budget_plan`, `region_accounting`, `oom_recovery`, `load_release_cycles`, `renderer_headroom`)
+   with the same signatures as the desktop reference, a `PASS memory` record with
+   heap/user/CDRAM/phycont figures, and `RESULT PASS groups=5` without any `FAIL` record.
 4. Recover `ux0:data/azahar-vita/boot.log` and retain it with the forced log, desktop output, SDK
    version, commit, sizes, hashes, and validator output under `build-vita/evidence/hito-4/`.
 
 `_newlib_heap_size_user` moves from Hito 3's 192 MiB to 160 MiB: removing the 4 MiB New 3DS
 allocation only frees 4 MiB by itself, but the corpus's own environments (kept heap-based and
-portable so their results stay comparable to the desktop reference - see the note in
-`budget_main.cpp`) still need close to the full ~134.5 MiB FCRAM+VRAM+DSP figure plus the ~5 MiB
-page table at their peak, so this milestone's reduction is real but modest; a build whose actual
-production system also allocated through the memblock path demonstrated here could go
-considerably lower, and is left as a documented follow-up rather than attempted in this probe.
+portable so their results stay comparable to the desktop reference) still need close to the full
+~134.5 MiB FCRAM+VRAM+DSP figure plus the ~5 MiB page table at their peak, so this milestone's
+reduction is real but modest. A first physical attempt additionally tried a real
+`sceKernelAllocMemBlock`-backed demonstration on top of this same heap and found it did not fit
+the platform's budget (see the note above) - a real production system allocating through the
+memblock path *instead of* the corpus's heap-based one could go considerably lower, and is left as
+a documented follow-up rather than attempted in this probe.
 
 ## Porting order
 

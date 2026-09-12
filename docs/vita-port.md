@@ -138,22 +138,30 @@ bit for bit purely because of the host they run on - `sizeof(void*)` (8 on the x
 `sceKernelGetFreeMemorySize`/`mallinfo()` reading are all excluded from every group's signature and
 logged separately instead, the same split milestone 3 already used for its own memory line.
 
-The Vita probe (`vita/src/budget_main.cpp`) additionally builds one extra, unsigned
-`Memory::MemorySystem` over a `MemblockEnvironment` that gives FCRAM, VRAM and DSP RAM their own
-named `sceKernelAllocMemBlock` allocations before running the corpus - the hardware demonstration
-of "separate the allocations by subsystem." This is deliberately kept out of the signed corpus: the
-corpus's own environments stay heap-based so their results remain comparable to the desktop
-reference, which has no `sceKernelAllocMemBlock` to compare against.
-
 `_newlib_heap_size_user` moves from 192 MiB (milestone 3) to 160 MiB. This is a smaller reduction
 than an early estimate in this milestone's plan assumed: removing the 4 MiB New 3DS allocation
 frees exactly that, but the corpus's own environments still construct full-sized, heap-based
 `Memory::MemorySystem` instances (up to ~134.5 MiB FCRAM+VRAM+DSP RAM, plus the ~5 MiB per-process
 page table once a homebrew is loaded) to stay comparable to the desktop reference, so the probe's
 own peak heap need did not shrink to the extent a fully memblock-backed production system's would.
-The real, measured reduction opportunity the `MemblockEnvironment` demonstration proves out is left
-as a documented follow-up for whenever a real Vita `Core::System` integration (post milestone 5)
-routes its own, not-test, `Memory::MemorySystem` through the same memblock allocator.
+
+An earlier version of this probe additionally built one extra, unsigned `Memory::MemorySystem` over
+a `MemblockEnvironment` that gave FCRAM, VRAM and DSP RAM their own named `sceKernelAllocMemBlock`
+allocations before running the corpus - the intended hardware demonstration of "separate the
+allocations by subsystem." Physical validation on 2026-09-12 found this does not fit the platform's
+budget: `_newlib_heap_size_user` reserves its full size as one memblock the instant the process
+starts, for the process's whole lifetime, regardless of whether anything has actually been
+malloc'd from it yet - it is not a lazily-grown limit. A 160 MiB heap plus the demonstration's own
+~134.5 MiB request needed ~294.5 MiB against the Vita's ~247 MiB measured user-RAM pool; the single
+128 MiB FCRAM request was the one the kernel refused
+(`SCE_KERNEL_ERROR_NO_FREE_PHYSICAL_PAGE`, `0x80024302`), caught cleanly by this same milestone's
+`IsInitialized()`/`GetFailedItem()` seam (`FAIL memory_regions`, `RESULT FAIL` - not a crash) but a
+design error nonetheless. The demonstration was removed rather than shrinking the heap further,
+since the corpus's own heap-based instances already need close to the full heap by themselves. The
+real, measured reduction opportunity a memblock-backed allocator offers is left as a documented
+follow-up for whenever a real Vita `Core::System` integration (post milestone 5) routes its own,
+not-test, `Memory::MemorySystem` through such an allocator *instead of* the corpus's heap-based
+one, so the two are never both reserved at once.
 
 ## Extended memory evaluation (Hito 4)
 

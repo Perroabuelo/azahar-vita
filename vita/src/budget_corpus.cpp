@@ -106,7 +106,9 @@ constexpr u64 TotalPlanBytes(const BudgetPlan& plan) {
            plan.newlib_heap_bytes;
 }
 
-GroupResult RunBudgetPlan() {
+} // namespace
+
+GroupResult RunBudgetPlanGroup() {
     constexpr BudgetPlan plan = MakeBudgetPlan();
     constexpr u64 total = TotalPlanBytes(plan);
     u32 signature = 2166136261U;
@@ -122,7 +124,7 @@ GroupResult RunBudgetPlan() {
     return {"budget_plan", passed, signature};
 }
 
-GroupResult RunRegionAccounting() {
+GroupResult RunRegionAccountingGroup() {
     PlainEnvironment environment;
     Memory::MemorySystem memory(environment);
 
@@ -146,7 +148,7 @@ GroupResult RunRegionAccounting() {
     return {"region_accounting", passed, signature};
 }
 
-GroupResult RunOomRecovery() {
+GroupResult RunOomRecoveryGroup() {
     bool failed_as_expected = false;
     bool failed_item_is_fcram = false;
     {
@@ -178,8 +180,15 @@ GroupResult RunOomRecovery() {
     return {"oom_recovery", passed, signature};
 }
 
-GroupResult RunLoadReleaseCycles(const std::string& work_dir) {
-    constexpr int NumCycles = 3;
+GroupResult RunLoadReleaseCyclesGroup(const std::string& work_dir, CycleObserver observer) {
+    // Two cycles is the minimum that can prove "repeating this doesn't change the outcome" - a
+    // third cycle would only be useful to rule out a warm-up effect, which doesn't apply here since
+    // each cycle builds a brand new Memory::MemorySystem/Kernel::KernelSystem from scratch with no
+    // state carried over (see RunSystemCycle). Kept at 2 rather than 3 because each cycle repeats
+    // the entire Hito 3 sequence, measured on real hardware at ~2.85 s (build-vita/evidence/hito-3),
+    // dominated by zeroing the ~134.5 MiB it allocates - a real cost worth not paying a third time
+    // for no additional signal.
+    constexpr int NumCycles = 2;
     bool all_cycles_passed = true;
     u32 first_cycle_signature = 0;
     bool cycles_match = true;
@@ -187,9 +196,9 @@ GroupResult RunLoadReleaseCycles(const std::string& work_dir) {
     for (int i = 0; i < NumCycles; ++i) {
         // Each call independently constructs and destroys its own Memory::MemorySystem,
         // Kernel::KernelSystem and Core::ARM_DynCom (see system_corpus.cpp) - there is no shared
-        // state a leak could hide in between iterations. What this proves is that three
-        // independent construct -> load -> run -> destroy cycles over the same inputs keep
-        // producing the exact same outcome; the actual host memory accounting across cycles
+        // state a leak could hide in between iterations. What this proves is that independent
+        // construct -> load -> run -> destroy cycles over the same inputs keep producing the exact
+        // same outcome; the actual host memory accounting across cycles
         // (mallinfo/sceKernelGetFreeMemorySize) is measured and logged separately on Vita, since a
         // desktop x86-64 reference and an ARMv7 Vita build were never going to agree on that bit
         // for bit.
@@ -206,6 +215,10 @@ GroupResult RunLoadReleaseCycles(const std::string& work_dir) {
         } else if (cycle_signature != first_cycle_signature) {
             cycles_match = false;
         }
+
+        if (observer != nullptr) {
+            observer(i);
+        }
     }
 
     const bool passed = all_cycles_passed && cycles_match;
@@ -214,14 +227,12 @@ GroupResult RunLoadReleaseCycles(const std::string& work_dir) {
     return {"load_release_cycles", passed, signature};
 }
 
-GroupResult RunRendererHeadroom() {
+GroupResult RunRendererHeadroomGroup() {
     constexpr BudgetPlan plan = MakeBudgetPlan();
     constexpr u64 total = TotalPlanBytes(plan);
     const bool passed = (total + RendererReserveBytes) <= UserBudgetBytes;
     return {"renderer_headroom", passed, Mix(2166136261U, passed ? 1 : 0)};
 }
-
-} // namespace
 
 bool BudgetReport::Passed() const {
     if (group_count != groups.size()) {
@@ -237,11 +248,11 @@ bool BudgetReport::Passed() const {
 
 BudgetReport RunBudgetCorpus(const std::string& work_dir) {
     BudgetReport report{};
-    report.groups[report.group_count++] = RunBudgetPlan();
-    report.groups[report.group_count++] = RunRegionAccounting();
-    report.groups[report.group_count++] = RunOomRecovery();
-    report.groups[report.group_count++] = RunLoadReleaseCycles(work_dir);
-    report.groups[report.group_count++] = RunRendererHeadroom();
+    report.groups[report.group_count++] = RunBudgetPlanGroup();
+    report.groups[report.group_count++] = RunRegionAccountingGroup();
+    report.groups[report.group_count++] = RunOomRecoveryGroup();
+    report.groups[report.group_count++] = RunLoadReleaseCyclesGroup(work_dir);
+    report.groups[report.group_count++] = RunRendererHeadroomGroup();
     return report;
 }
 

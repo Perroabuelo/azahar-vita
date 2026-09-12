@@ -42,8 +42,6 @@ grep -q 'Memory::MemorySystem::IsInitialized' <<<"${symbols}"
 grep -q 'Memory::MemorySystem::GetAllocatedBytes' <<<"${symbols}"
 grep -q 'InterpreterMainLoop(ARMul_State\*)' <<<"${symbols}"
 grep -q 'trans_cache_buf$' <<<"${symbols}"
-# The Hito 4 hardware demonstration of separated, named memblock allocation (see budget_main.cpp).
-grep -q 'MemblockEnvironment' <<<"${symbols}"
 grep -q '_newlib_heap_size_user$' <<<"${symbols}"
 
 cache_size_hex="$(awk '$4 == "trans_cache_buf" { print $2 }' <<<"${symbols}")"
