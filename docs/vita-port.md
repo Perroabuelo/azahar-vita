@@ -86,7 +86,14 @@ reached its entry point through the kernel's own thread scheduler, and ran it to
 `memory_and_process`, `entry_point`, `svc_and_service_ipc`, `diagnostics`) matched the desktop
 reference's signatures exactly, with user memory stable across three consecutive launches.
 
-## Milestone 4 progress
+Milestone 4 was completed on physical Vita hardware on 2026-09-12. All five budget corpus groups
+(`budget_plan`, `region_accounting`, `oom_recovery`, `load_release_cycles`, `renderer_headroom`)
+matched the desktop reference's signatures exactly across three consecutive launches, with
+`user_free` stable at 91,226,112 bytes (87.0 MiB) before and after the corpus ran and the 160 MiB
+`_newlib_heap_size_user` confirmed in the log. Two design errors surfaced by that same physical
+testing were fixed and reverified before this closure - see "Milestone 4 closure" below.
+
+## Milestone 4 closure
 
 Milestone 4 turns `Memory::MemorySystem`'s four large backing allocations (FCRAM, VRAM, DSP RAM,
 New 3DS extra RAM) from an unconditional `std::make_unique<u8[]>` into calls through
@@ -122,12 +129,15 @@ the desktop reference and the Vita probe exactly like milestones 2 and 3:
   false, `GetFailedItem()` names FCRAM, both objects are destroyed cleanly, and a second,
   unrestricted `MemorySystem` then succeeds. This is the "memory errors are recoverable" criterion
   exercised directly, in the one class of failure that took milestone 3 down without a log record.
-- `load_release_cycles` - the milestone 3 loader/memory/kernel sequence run three independent
-  times through a new `Vita::SystemProbe::RunSystemCycle` (a refactor of `RunSystemCorpus` that
-  changes no milestone 3 behavior or signature - reverified against the retained desktop reference
-  after the split), checked for byte-identical results across all three cycles. This is the "no
-  continuous growth across load/close cycles" criterion, expressed as a property that is exactly
-  as meaningful on an x86-64 desktop as on ARMv7 hardware.
+- `load_release_cycles` - the milestone 3 loader/memory/kernel sequence run two independent times
+  through a new `Vita::SystemProbe::RunSystemCycle` (a refactor of `RunSystemCorpus` that changes
+  no milestone 3 behavior or signature - reverified against the retained desktop reference after
+  the split), checked for byte-identical results across both cycles. This is the "no continuous
+  growth across load/close cycles" criterion, expressed as a property that is exactly as
+  meaningful on an x86-64 desktop as on ARMv7 hardware. Two cycles, not three: the final signature
+  depends only on the first cycle's result plus two pass/match booleans, so a third cycle is pure
+  redundant confirmation - confirmed empirically when the reduction from three to two left the
+  desktop reference's signature (`0x17E0B0FE`) unchanged.
 - `renderer_headroom` - a policy check that the declared plan still leaves a reserve for milestone
   5's software renderer.
 
@@ -162,6 +172,20 @@ real, measured reduction opportunity a memblock-backed allocator offers is left 
 follow-up for whenever a real Vita `Core::System` integration (post milestone 5) routes its own,
 not-test, `Memory::MemorySystem` through such an allocator *instead of* the corpus's heap-based
 one, so the two are never both reserved at once.
+
+A second finding from that same round of physical testing: even after removing the demonstration,
+one launch was silently busy for several seconds (up to two full ~134.5 MiB `Memory::MemorySystem`
+constructions in `load_release_cycles` alone, plus one more each in `region_accounting` and
+`oom_recovery`, each dominated by zeroing freshly allocated memory) before the probe ever read the
+controller, which made that launch look hung rather than merely slow. Fixed by dropping
+`load_release_cycles` to two cycles (see above) and by logging a `PASS memory_progress` line after
+each of the five groups plus a `PASS memory_cycle_progress` line after each `load_release_cycles`
+cycle, both flushed to `boot.log` immediately - a slow-but-working run is now distinguishable from
+a stuck one.
+
+This validation was completed on 2026-09-12; the retained evidence in `build-vita/evidence/hito-4/`
+is the canonical record, and reflects the corrected build (both findings above fixed and
+reverified) rather than the first, failing attempt.
 
 ## Extended memory evaluation (Hito 4)
 

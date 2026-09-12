@@ -356,6 +356,18 @@ the platform's budget (see the note above) - a real production system allocating
 memblock path *instead of* the corpus's heap-based one could go considerably lower, and is left as
 a documented follow-up rather than attempted in this probe.
 
+The first physical attempt found two design errors, both fixed and reverified: the memblock
+demonstration above exceeded the platform's budget together with the heap
+(`SCE_KERNEL_ERROR_NO_FREE_PHYSICAL_PAGE`, `0x80024302`) and was removed; and, once fixed, the
+corpus's own real cost (up to two full ~134.5 MiB `Memory::MemorySystem` constructions before the
+first controller read) made one launch look hung rather than merely slow, fixed by dropping
+`load_release_cycles` to two cycles and adding a `PASS memory_progress`/`PASS
+memory_cycle_progress` progress trail to `boot.log`. The corrected build then passed three
+consecutive launches: `RESULT PASS groups=5` with all five signatures matching the desktop
+reference, and `user_free` stable at 91,226,112 bytes before and after the corpus ran. This
+validation was completed on 2026-09-12; the retained evidence in `build-vita/evidence/hito-4/` is
+the canonical record.
+
 ## Porting order
 
 1. Compile `citra_common` without networking, desktop dynamic-library loading, or platform-specific

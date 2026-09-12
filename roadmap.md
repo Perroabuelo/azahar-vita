@@ -38,7 +38,7 @@ La compatibilidad completa con el catálogo de 3DS no forma parte del alcance in
 | 1 | Núcleo mínimo de Azahar compilando para ARMv7/Vita | Completo |
 | 2 | Intérprete ARM11 ejecutando pruebas deterministas | Completo |
 | 3 | Loader, memoria y kernel HLE ejecutando homebrew sin video | Completo |
-| 4 | Presupuesto de memoria estable y medible | En curso |
+| 4 | Presupuesto de memoria estable y medible | Completo |
 | 5 | Imagen correcta mediante renderizador de referencia | Pendiente |
 | 6 | Backend gráfico acelerado para Vita | Pendiente |
 | 7 | Controles, táctil e interfaz mínima | Pendiente |
@@ -162,18 +162,27 @@ controlada cuando una asignación no sea posible.
 - los errores de memoria son recuperables;
 - hay presupuesto suficiente para iniciar el renderizador.
 
-### Progreso
+El Hito 4 se completó y validó en hardware físico de Vita el 2026-09-12. Las cuatro reservas
+grandes de `Memory::MemorySystem` pasan por `Core::MemoryEnvironment::AllocateBackingMemory`/
+`FreeBackingMemory` en vez de un `new[]` incondicional, lo que convierte un fallo de asignación en
+un `IsInitialized()`/`GetFailedItem()` consultable en vez de un cierre nativo silencioso; la RAM
+extra de New 3DS (4 MiB) deja de reservarse en builds `AZAHAR_VITA`; el corpus determinista
+(`budget_plan`, `region_accounting`, `oom_recovery`, `load_release_cycles`, `renderer_headroom`)
+pasa de forma idéntica en la referencia de escritorio y en hardware real; y `_newlib_heap_size_user`
+baja de 192 a 160 MiB.
 
-Implementado en host (sonda de escritorio y build cruzada para Vita validadas; ver
-`docs/vita-port.md`): las cuatro reservas grandes de `Memory::MemorySystem` pasan por
-`Core::MemoryEnvironment::AllocateBackingMemory`/`FreeBackingMemory` en vez de un `new[]`
-incondicional, lo que convierte un fallo de asignación en un `IsInitialized()`/`GetFailedItem()`
-consultable en vez de un cierre nativo silencioso; la RAM extra de New 3DS (4 MiB) deja de
-reservarse en builds `AZAHAR_VITA`; el corpus determinista (`budget_plan`, `region_accounting`,
-`oom_recovery`, `load_release_cycles`, `renderer_headroom`) pasa de forma idéntica en la
-referencia de escritorio y en la build cruzada de Vita; y `_newlib_heap_size_user` baja de 192 a
-160 MiB. Pendiente la validación en hardware físico (Hito 4 sólo se cierra con esa evidencia,
-regla 7 de desarrollo).
+La primera validación física encontró dos problemas reales, no de hardware sino de diseño de la
+sonda, ambos corregidos y revalidados: (1) una demostración adicional con bloques
+`sceKernelAllocMemBlock` separados chocaba con el propio heap de newlib (~294,5 MiB pedidos contra
+~247 MiB disponibles), capturado limpiamente por el propio mecanismo de fallo controlado que este
+hito añadió en vez de un cierre nativo — se quitó esa demostración; (2) el corpus tardaba
+~10-15 s en hardware real (dominado por poner a cero ~134,5 MiB varias veces) antes de leer el
+mando, lo que en un primer lanzamiento pareció un cuelgue — se redujo `load_release_cycles` de tres
+ciclos a dos (matemáticamente equivalente) y se añadió registro de progreso por grupo. La
+validación final: tres lanzamientos normales consecutivos con `RESULT PASS groups=5` y las cinco
+firmas idénticas a la referencia de escritorio, y `user_free` estable (91.226.112 bytes antes y
+después) confirmando ausencia de crecimiento. Evidencia retenida en
+`build-vita/evidence/hito-4/`.
 
 ## Hito 5 — Renderizador de referencia
 
@@ -355,14 +364,16 @@ contribuciones de la comunidad.
 
 ## Próximas acciones
 
-1. Completar la validación física del Hito 4: instalar y lanzar tres veces la sonda de memoria
-   (normal y de fallo forzado), recuperar `boot.log` y retener la evidencia en
-   `build-vita/evidence/hito-4/`, siguiendo el procedimiento de `vita/README.md`.
-2. Cerrar el Hito 4 en `roadmap.md` y `docs/vita-port.md` una vez confirmada esa evidencia.
-3. Evaluar, como trabajo posterior no bloqueante, enrutar las propias reservas del corpus de
-   pruebas a través de `MemblockEnvironment` (o un mecanismo equivalente) para que la reducción de
-   heap medida en el Hito 4 se acerque a la que un sistema de producción real alcanzaría, en vez de
-   quedar acotada por la necesidad de comparar bit a bit con la referencia de escritorio.
+1. Iniciar el Hito 5 (renderizador de referencia): llevar el renderizador por software de Azahar a
+   la build de Vita y copiar su resultado al framebuffer, reutilizando el patrón de sondas y
+   evidencia de los hitos 0-4.
+2. Evaluar, como trabajo posterior no bloqueante, enrutar las propias reservas del corpus de
+   pruebas del Hito 4 a través de un asignador respaldado por `sceKernelAllocMemBlock` (en vez de
+   heap) para que la reducción de heap medida se acerque a la que un sistema de producción real
+   alcanzaría, en vez de quedar acotada por la necesidad de comparar bit a bit con la referencia de
+   escritorio. Un primer intento de esto (`MemblockEnvironment`, ver evidencia del Hito 4) mostró que
+   no puede convivir con el propio heap de la sonda de pruebas en el mismo proceso; haría falta que
+   el corpus completo migrara al asignador real, no sumarlo aparte.
 
 El primer gran objetivo demostrable será ejecutar correctamente un homebrew de 3DS con CPU,
 imagen, controles y logs. En ese punto el proyecto habrá pasado de ser una prueba de VitaSDK a un
