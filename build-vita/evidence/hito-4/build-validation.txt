@@ -1,0 +1,99 @@
+Azahar Vita milestone 4 host build validation
+Date: 2026-09-12
+Git commit: 67eb7abb77f722097b0dee71e653bc269ccebcc6
+
+VitaSDK:
+Release   2026.08
+Sequence  2026091144
+Toolchain sdk-snapshot-20260825.611.1
+Packages  packages-2026.08-snapshot-20260911.41.1
+Installed 2026.08.1-1
+Compiler GCC 15.2.0
+
+Canonical memory budget probe ELF:
+Path: build-vita/hito4-cmake/azahar_vita_budget_probe
+Class: ELF32
+Machine: ARM
+Flags: Version5 EABI, hard-float ABI
+Text: 670596 bytes
+Data: 12346 bytes
+BSS: 2388512 bytes
+Total: 3071454 bytes
+Translation cache: 2097152 bytes
+Newlib heap request: 167772160 bytes (160 MiB, via _newlib_heap_size_user; see below)
+
+Canonical memory budget probe VPK:
+Path: build-vita/hito4-cmake/azahar_vita_budget_probe.vpk
+SHA-256: bfe0c85ea137e48840a0df3f5d1986b5017a5051d201648d60b129bc84756c28
+Title ID: AZHV00005
+App version: 00.01
+Title: Azahar Vita Memory Probe
+Contents:
+- sce_sys/param.sfo
+- eboot.bin
+
+Forced-failure memory budget probe:
+Path: build-vita/hito4-failure/azahar_vita_budget_probe.vpk
+Text: 477996 bytes
+Data: 11730 bytes
+BSS: 290256 bytes
+Total: 779982 bytes
+SHA-256: 820558c3802907412bdc97dd886158fbef511576c11bfb43b1e5797302a2d8cf
+
+Host validation:
+PASS desktop budget reference groups=5
+PASS group=budget_plan signature=0xCEB97165
+PASS group=region_accounting signature=0x9380D2CB
+PASS group=oom_recovery signature=0x30CCBD42
+PASS group=load_release_cycles signature=0x17E0B0FE
+PASS group=renderer_headroom signature=0x040C5B8C
+PASS CMake normal Vita build
+PASS CMake forced-failure Vita build
+PASS retained milestone 1/2/3 CMake builds
+PASS ELF32 ARM hard-float inspection
+PASS VPK contents and SFO metadata
+PASS MemorySystem::IsInitialized/GetAllocatedBytes symbols and 2 MiB translation cache
+PASS forbidden dependency symbol audit (Core::System, GDBStub::, PLGLDR::, Qt, Vulkan, OpenGL,
+     ZSTD, CryptoPP, boost::iostreams/archive absent)
+
+Physical Vita validation:
+PASS forced-failure path code=0xA4000001 result=FAIL
+PASS normal probe launched three times
+PASS all five budget corpus signatures match desktop reference exactly on every launch
+PASS memory heap_request=167772160 heap_used=23632 user_free_before=91226112
+     user_free_after=91226112 (stable) cdram_free_before=117440512 cdram_free_after=115343360
+     phycont_free_before=27262976 phycont_free_after=27262976 (stable)
+PASS controller input and framebuffer cleanup
+PASS final normal run result=PASS groups=5 with no FAIL records
+
+Hardware finding (first attempt): the normal probe failed on every launch with
+`FAIL memory_block name=azahar-fcram bytes=134217728 code=0x80024302`
+(SCE_KERNEL_ERROR_NO_FREE_PHYSICAL_PAGE) followed by `FAIL memory_regions` and `RESULT FAIL`. The
+probe's first version additionally built one extra Memory::MemorySystem over a
+sceKernelAllocMemBlock-backed environment (MemblockEnvironment) to demonstrate the "separate the
+allocations" requirement live, on top of a 160 MiB newlib heap. _newlib_heap_size_user reserves its
+full size as one memblock the instant the process starts, for the process's entire lifetime,
+whether or not anything has actually been malloc'd from it - not a lazily-grown limit - so the
+160 MiB heap plus that demonstration's own ~134.5 MiB request needed ~294.5 MiB against the Vita's
+~247 MiB measured user-RAM pool. Caught cleanly by this milestone's own
+IsInitialized()/GetFailedItem() seam (a controlled FAIL, not a crash), but a design error
+nonetheless: MemblockEnvironment was removed rather than shrinking the heap further, since the
+corpus's own heap-based Memory::MemorySystem instances already need close to the full heap by
+themselves.
+
+Hardware finding (second attempt): after that fix, one launch appeared unresponsive to START for
+long enough to look hung; the recovered boot.log had stopped at "PASS logger" with no further
+record. The corpus's own groups (up to two full ~134.5 MiB Memory::MemorySystem constructions in
+load_release_cycles alone, each repeating the whole Hito 3 sequence at ~2.85 s per the retained
+Hito 3 evidence, plus one more each in region_accounting and oom_recovery) run entirely before the
+probe ever reads the controller, and had simply not finished yet. Fixed by dropping
+load_release_cycles from three cycles to two (mathematically equivalent - the desktop reference's
+load_release_cycles signature, 0x17E0B0FE, is unchanged, since the final signature depends only on
+the first cycle's result plus two pass/match booleans) and by logging a `PASS memory_progress`
+line after each of the five groups plus a `PASS memory_cycle_progress` line after each
+load_release_cycles cycle, so a slow-but-working run is now distinguishable in boot.log from a
+stuck one. The retained boot-normal.log above is from the corrected build and shows the corpus
+completing in ~10.8 s.
+
+Physical validation date: 2026-09-12
+Milestone 4: COMPLETE

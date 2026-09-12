@@ -1,0 +1,20 @@
+[   0.007409] Core.ARM11 <Info> budget_main.cpp:main:191: memory_probe_version=04.00 platform=vita
+[   0.032085] Core.ARM11 <Info> budget_main.cpp:main:209: PASS logger backend=vita path=ux0:data/azahar-vita/boot.log
+[   0.032852] Core.ARM11 <Info> budget_main.cpp:main:226: PASS memory_progress group=budget_plan
+[   2.636544] Core.ARM11 <Info> budget_main.cpp:main:228: PASS memory_progress group=region_accounting
+[   5.365802] Core.ARM11 <Info> budget_main.cpp:main:230: PASS memory_progress group=oom_recovery
+[   8.087711] Kernel <Info> core/hle/kernel/process.cpp:~Process:704: Cleaning up process 11
+[   8.095300] Core.ARM11 <Info> budget_main.cpp:LogCycleProgress:166: PASS memory_cycle_progress cycle=0
+[  10.814579] Kernel <Info> core/hle/kernel/process.cpp:~Process:704: Cleaning up process 11
+[  10.821630] Core.ARM11 <Info> budget_main.cpp:LogCycleProgress:166: PASS memory_cycle_progress cycle=1
+[  10.825036] Core.ARM11 <Info> budget_main.cpp:main:233: PASS memory_progress group=load_release_cycles
+[  10.828472] Core.ARM11 <Info> budget_main.cpp:main:235: PASS memory_progress group=renderer_headroom
+[  10.832347] Core.ARM11 <Info> budget_main.cpp:main:240: PASS group=budget_plan signature=0xCEB97165
+[  10.836172] Core.ARM11 <Info> budget_main.cpp:main:240: PASS group=region_accounting signature=0x9380D2CB
+[  10.839950] Core.ARM11 <Info> budget_main.cpp:main:240: PASS group=oom_recovery signature=0x30CCBD42
+[  10.843883] Core.ARM11 <Info> budget_main.cpp:main:240: PASS group=load_release_cycles signature=0x17E0B0FE
+[  10.847686] Core.ARM11 <Info> budget_main.cpp:main:240: PASS group=renderer_headroom signature=0x040C5B8C
+[  10.851488] Core.ARM11 <Info> budget_main.cpp:main:254: PASS memory heap_request=167772160 heap_used=23632 user_free_before=91226112 user_free_after=91226112 cdram_free_before=117440512 cdram_free_after=115343360 phycont_free_before=27262976 phycont_free_after=27262976
+[  55.887357] Core.ARM11 <Info> budget_main.cpp:main:281: PASS controller input=start
+[  55.904076] Core.ARM11 <Info> budget_main.cpp:main:286: PASS cleanup framebuffer=released
+[  55.909938] Core.ARM11 <Info> budget_main.cpp:main:287: RESULT PASS groups=5
