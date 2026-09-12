@@ -1,0 +1,4 @@
+[   0.009777] Core.ARM11 <Info> render_main.cpp:main:196: render_probe_version=05.00 platform=vita
+[   0.037332] Core.ARM11 <Info> render_main.cpp:main:219: PASS logger backend=vita path=ux0:data/azahar-vita/boot.log
+[   0.038535] Core.ARM11 <Error> render_main.cpp:Fail:175: FAIL forced_failure code=0xA5000001
+[   0.038951] Core.ARM11 <Error> render_main.cpp:Fail:176: RESULT FAIL
