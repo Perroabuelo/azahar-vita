@@ -28,9 +28,12 @@ using its libretro frontend immediately would hide platform failures behind Retr
 
 ## Definition of the next milestone
 
-Milestone 1 is complete when a Vita build executes a deterministic group of ARM11 instructions via
-Azahar's DynCom interpreter and records the expected register values in the boot log. It does not
-need to load a commercial game.
+Milestone 1 is complete when the reduced `citra_common` target builds for Vita, its native probe
+passes the deterministic utility, logger, timer, filesystem, serialization, and memory checks on
+physical hardware, and the resulting ELF size and initial memory use are retained as evidence.
+
+Executing a deterministic group of ARM11 instructions through DynCom belongs to milestone 2. It
+does not need to load a commercial game.
 
 ## Validation status
 
@@ -38,3 +41,7 @@ Milestone 0 was completed on physical Vita hardware on 2026-09-11. Both the forc
 the normal six-band probe were verified with VitaSDK 2026.08; the normal run recorded every expected
 check as `PASS` and exited through the START input. The validated VPK SHA-256 is
 `fd26bd100970fbaf0fc9ab3d565b7caa4a3096bc993d66576fc1a573eb9d1e6b`.
+
+Milestone 1 now has a host-validated ARMv7 build and is awaiting physical Vita validation. Its
+dependency graph contains fmt in header-only mode and Boost headers; desktop frontends, network,
+audio, renderers, Crypto++, zstd, and compiled Boost libraries are not linked.

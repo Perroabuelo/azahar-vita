@@ -34,8 +34,8 @@ La compatibilidad completa con el catálogo de 3DS no forma parte del alcance in
 
 | Hito | Resultado esperado | Estado |
 | --- | --- | --- |
-| 0 | Sonda nativa instalada y validada en Vita | En desarrollo |
-| 1 | Núcleo mínimo de Azahar compilando para ARMv7/Vita | Pendiente |
+| 0 | Sonda nativa instalada y validada en Vita | Completo |
+| 1 | Núcleo mínimo de Azahar compilando para ARMv7/Vita | En validación física |
 | 2 | Intérprete ARM11 ejecutando pruebas deterministas | Pendiente |
 | 3 | Loader, memoria y kernel HLE ejecutando homebrew sin video | Pendiente |
 | 4 | Presupuesto de memoria estable y medible | Pendiente |
@@ -342,9 +342,9 @@ contribuciones de la comunidad.
 
 ## Próximas acciones
 
-1. Validar físicamente el VPK de franjas de colores.
-2. Preparar una prueba aislada del intérprete ARM DynCom.
-3. Medir las dependencias necesarias para compilar `citra_common` en Vita.
+1. Validar en hardware las variantes normal y de fallo forzado de la sonda `citra_common`.
+2. Conservar el log, tamaños y hashes del Hito 1 bajo `build-vita/evidence/hito-1`.
+3. Preparar la prueba aislada del intérprete ARM DynCom para el Hito 2.
 
 El primer gran objetivo demostrable será ejecutar correctamente un homebrew de 3DS con CPU,
 imagen, controles y logs. En ese punto el proyecto habrá pasado de ser una prueba de VitaSDK a un
