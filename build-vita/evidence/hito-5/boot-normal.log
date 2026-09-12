@@ -1,0 +1,22 @@
+[   0.021783] Core.ARM11 <Info> render_main.cpp:main:196: render_probe_version=05.00 platform=vita
+[   0.034846] Core.ARM11 <Info> render_main.cpp:main:219: PASS logger backend=vita path=ux0:data/azahar-vita/boot.log
+[   3.106342] Core.ARM11 <Info> render_main.cpp:main:236: PASS render_progress group=renderer_init
+[   6.165640] Core.ARM11 <Info> render_main.cpp:main:238: PASS render_progress group=color_fill
+[   9.239542] Core.ARM11 <Info> render_main.cpp:main:240: PASS render_progress group=framebuffer_formats
+[  12.302124] Core.ARM11 <Info> render_main.cpp:main:242: PASS render_progress group=transfer_engine
+[  15.432512] Core.ARM11 <Info> render_main.cpp:main:244: PASS render_progress group=triangle_raster
+[  18.566903] Core.ARM11 <Info> render_main.cpp:main:246: PASS render_progress group=textured_quad
+[  23.308016] Kernel <Info> core/hle/kernel/process.cpp:~Process:704: Cleaning up process 11
+[  23.314558] Core.ARM11 <Info> render_main.cpp:main:250: PASS render_progress group=guest_frame
+[  23.320548] Core.ARM11 <Info> render_main.cpp:main:255: PASS group=renderer_init signature=0x040C5B8C
+[  23.324411] Core.ARM11 <Info> render_main.cpp:main:255: PASS group=color_fill signature=0xEC741EF7
+[  23.328247] Core.ARM11 <Info> render_main.cpp:main:255: PASS group=framebuffer_formats signature=0x01B18CE8
+[  23.332096] Core.ARM11 <Info> render_main.cpp:main:255: PASS group=transfer_engine signature=0xEC741EF7
+[  23.335855] Core.ARM11 <Info> render_main.cpp:main:255: PASS group=triangle_raster signature=0x040C5B8C
+[  23.339770] Core.ARM11 <Info> render_main.cpp:main:255: PASS group=textured_quad signature=0x040C5B8C
+[  23.343826] Core.ARM11 <Info> render_main.cpp:main:255: PASS group=guest_frame signature=0xEC741EF7
+[  23.357713] Core.ARM11 <Info> render_main.cpp:main:273: PASS present top=64x64 bottom=320x240
+[  23.365447] Core.ARM11 <Info> render_main.cpp:main:281: PASS memory heap_request=167772160 heap_used=348352 user_free_before=91226112 user_free_after=91226112 cdram_free_before=117440512 cdram_free_after=115343360 phycont_free_before=27262976 phycont_free_after=27262976
+[  27.828863] Core.ARM11 <Info> render_main.cpp:main:308: PASS controller input=start
+[  27.845519] Core.ARM11 <Info> render_main.cpp:main:313: PASS cleanup framebuffer=released
+[  27.851355] Core.ARM11 <Info> render_main.cpp:main:314: RESULT PASS groups=7

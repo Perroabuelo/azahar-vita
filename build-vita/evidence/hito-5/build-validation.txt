@@ -1,0 +1,107 @@
+Azahar Vita milestone 5 host build validation
+Date: 2026-09-12
+Git commit: 7bbb24fbd05de3d6e4f0d6bd3a3f8c1f3e93f4d3
+
+VitaSDK (from ~/vitasdk/version_info.txt - built 2026-08-25 12:49:54):
+newlib            64aa7aa33d4f380451a1f100d19589226cdad334
+pthread-embedded  11d2e5722d98c86f33c908fc47b2cf6e55205db5
+samples           fe8fbef570f3280586c0c20157146e3faefb2181
+vita-headers      ebc8f4f7ac8313fe4f74ca95724116b224bad184
+vita-toolchain    c527abce028df33f5281e9ed4994c25fcef53c7d
+Compiler GCC 15.2.0
+
+Canonical software renderer probe ELF:
+Path: build-vita/hito5-cmake/azahar_vita_render_probe
+Class: ELF32
+Machine: ARM
+Flags: Version5 EABI, hard-float ABI
+Text: 726432 bytes
+Data: 12446 bytes
+BSS: 2390728 bytes
+Total: 3129606 bytes
+Translation cache: 2097152 bytes
+Newlib heap request: 167772160 bytes (160 MiB, via _newlib_heap_size_user; see Hito 4)
+
+Canonical software renderer probe VPK:
+Path: build-vita/hito5-cmake/azahar_vita_render_probe.vpk
+SHA-256: 54e35ddb8ab40a1497633f033c69def393e6b702278334888a0133785d8b0a60
+Title ID: AZHV00006
+App version: 00.01
+Title: Azahar Vita Render Probe
+Contents:
+- sce_sys/param.sfo
+- eboot.bin
+
+Forced-failure software renderer probe:
+Path: build-vita/hito5-failure/azahar_vita_render_probe.vpk
+Text: 482840 bytes
+Data: 11814 bytes
+BSS: 290328 bytes
+Total: 784982 bytes
+SHA-256: 42a944035f159ac523e12addda1cb4b6181b05293ef781732f3b426ba860710a
+
+Host validation:
+PASS desktop render reference groups=7
+PASS group=renderer_init signature=0x040C5B8C
+PASS group=color_fill signature=0xEC741EF7
+PASS group=framebuffer_formats signature=0x01B18CE8
+PASS group=transfer_engine signature=0xEC741EF7
+PASS group=triangle_raster signature=0x040C5B8C
+PASS group=textured_quad signature=0x040C5B8C
+PASS group=guest_frame signature=0xEC741EF7
+PASS CMake normal Vita build
+PASS CMake forced-failure Vita build
+PASS retained milestone 1/4 CMake builds (regression check after this milestone's video_core
+     changes; see docs/vita-port.md's "Milestone 5 closure")
+PASS ELF32 ARM hard-float inspection
+PASS VPK contents and SFO metadata
+PASS render/loader/kernel symbols (Loader::Load3DSXImage, Kernel::KernelSystem::KernelSystem,
+     Memory::MemorySystem::MemorySystem, Pica::PicaCore::ProcessCmdList,
+     SwRenderer::RendererSoftware::SwapBuffers, RasterizerSoftware::AddTriangle,
+     SwBlitter::TextureCopy/MemoryFill, Pica::Shader::InterpreterEngine) and 2 MiB translation cache
+PASS forbidden dependency symbol audit (Core::System::, GDBStub::, PLGLDR::, OpenGL::, Vulkan::,
+     Qt, Vulkan, OpenGL, Android, Windows, Discord, ZSTD, CryptoPP, boost::iostreams/archive absent)
+PASS desktop reference PPM captures: top=375f6edc0591bf6664db23188e9229e5ad3746b2fe9964773e46425ed0a86c26
+     bottom=98b8246eae47ffad392ed23412ff7c7a1cf8c341c08348925c7993d8febeca73
+
+Physical Vita validation:
+PASS forced-failure path code=0xA5000001 result=FAIL
+PASS normal probe launched three times
+PASS all seven render corpus signatures match desktop reference exactly on every launch
+PASS present top=64x64 bottom=320x240 (both rendered screens visible on the physical panel: a flat
+     green top screen composed by the guest homebrew's own ARM11-submitted PICA command list, a
+     flat green bottom screen via regs_lcd.color_fill_bottom - not color bands, unlike every earlier
+     milestone's probe)
+PASS memory heap_request=167772160 heap_used=348352 user_free_before=91226112
+     user_free_after=91226112 (stable) cdram_free_before=117440512 cdram_free_after=115343360
+     phycont_free_before=27262976 phycont_free_after=27262976 (stable)
+PASS controller input and framebuffer cleanup
+PASS final normal run result=PASS groups=7 with no FAIL records
+PASS recovered ux0:data/azahar-vita/hito-5/hito5-top.ppm SHA-256 matches desktop reference exactly:
+     375f6edc0591bf6664db23188e9229e5ad3746b2fe9964773e46425ed0a86c26
+PASS recovered ux0:data/azahar-vita/hito-5/hito5-bottom.ppm SHA-256 matches desktop reference
+     exactly: 98b8246eae47ffad392ed23412ff7c7a1cf8c341c08348925c7993d8febeca73
+
+Hardware finding: the normal probe crashed natively on the first physical attempt, on every launch,
+with no boot.log record past "PASS logger" - confirmed as a genuine crash (not a controlled FAIL)
+by two recovered psp2core-*.psp2dmp core dumps. Both dumps decode to the identical crash: an
+"Undefined instruction exception" on the main thread at the same offset relative to the ELF's load
+base in both dumps (deterministic - the load base itself shifts slightly between launches, but
+PC - base and LR - base do not), with r3 and r12 both holding the 0xdeadbeef poison pattern and PC
+landing inside an unrelated global (Settings::values) rather than any real function - executing
+through a garbage function pointer, not corruption from this milestone's actual rendering logic.
+SwRenderer::RasterizerSoftware is the only place in this whole build that constructs a
+Common::ThreadWorker (std::jthread + std::stop_token), and this is the first Vita milestone to
+construct one at all; VitaSDK's C++20 standard library does not support this on real hardware, even
+though it compiles, links, and (per the earlier commits in this milestone) had already been verified
+cross-compiling cleanly for ARMv7 - the gap only showed up under physical testing. Fixed by never
+constructing a real std::jthread under AZAHAR_VITA (num_sw_threads = 0, an empty
+std::vector<std::jthread> that never instantiates std::jthread's own constructor) and running each
+scanline directly on the calling thread instead of through QueueWork/WaitForRequests - correct
+either way, since scanlines have no cross-scanline dependencies, and confirmed byte-for-byte
+unchanged on the desktop reference (same seven signatures, same two PPM hashes, before and after).
+The corrected build then passed three consecutive launches with all seven corpus signatures and
+both PPM captures matching the desktop reference exactly, and stable user_free before and after.
+
+Physical validation date: 2026-09-12
+Milestone 5: COMPLETE
