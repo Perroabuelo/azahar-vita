@@ -7,7 +7,6 @@
 #include <cstring>
 #include <boost/serialization/array.hpp>
 #include <boost/serialization/binary_object.hpp>
-#include "audio_core/dsp_interface.h"
 #include "common/archives.h"
 #include "common/assert.h"
 #include "common/atomic_ops.h"
@@ -16,18 +15,20 @@
 #include "common/optional_helper.h"
 #include "common/settings.h"
 #include "common/swap.h"
-#include "core/arm/arm_interface.h"
 #include "core/arm/exception_handler.h"
-#include "core/core.h"
 #ifdef ENABLE_GDBSTUB
 #include "core/gdbstub/gdbstub.h"
 #endif
-#include "core/global.h"
 #include "core/hle/kernel/process.h"
-#include "core/hle/service/plgldr/plgldr.h"
 #include "core/memory.h"
-#include "video_core/gpu.h"
-#include "video_core/renderer_base.h"
+#include "core/memory_environment.h"
+#if !defined(AZAHAR_VITA)
+// Only needed by MemorySystem::BackingMemImpl's default constructor, which boost::serialization
+// uses to reconstruct backing memory objects when loading a savestate. Serialization is disabled
+// on Vita (see common/archives.h), so this dependency on the full Core::System definition is too.
+#include "core/core.h"
+#include "core/global.h"
+#endif
 
 SERIALIZE_EXPORT_IMPL(Memory::MemorySystem::BackingMemImpl<Memory::Region::FCRAM>)
 SERIALIZE_EXPORT_IMPL(Memory::MemorySystem::BackingMemImpl<Memory::Region::VRAM>)
@@ -44,9 +45,23 @@ constexpr u32 SIGSEGV = 11;
 
 namespace Memory {
 
+// 'auto' (rather than u32) keeps this the same unnamed enum type as FCRAM_SIZE/FCRAM_N3DS_SIZE
+// themselves, so it stays a homogeneous match for the other PADDR/_SIZE pairs it is grouped with
+// below (e.g. in GetPhysMemRegionInfo's memory_areas).
+#if defined(AZAHAR_VITA)
+// The Vita port targets the Old 3DS memory map only (see docs/vita-port.md): a New 3DS's 256 MiB
+// FCRAM does not fit the platform's memory budget. KernelSystem::MemoryInit (hle/kernel/memory.cpp)
+// enforces that this stays paired with an Old 3DS MemoryMode and Settings::values.is_new_3ds=false.
+constexpr auto FCRAM_ALLOCATED_SIZE = FCRAM_SIZE;
+#else
+constexpr auto FCRAM_ALLOCATED_SIZE = FCRAM_N3DS_SIZE;
+#endif
+
 void PageTable::Clear() {
     pointers.raw.fill(nullptr);
+#if !defined(AZAHAR_VITA)
     pointers.refs.fill(MemoryRef());
+#endif
     attributes.fill(PageType::Unmapped);
 }
 
@@ -102,12 +117,12 @@ class MemorySystem::Impl {
 public:
     // Visual Studio would try to allocate these on compile time
     // if they are std::array which would exceed the memory limit.
-    std::unique_ptr<u8[]> fcram = std::make_unique<u8[]>(Memory::FCRAM_N3DS_SIZE);
+    std::unique_ptr<u8[]> fcram = std::make_unique<u8[]>(Memory::FCRAM_ALLOCATED_SIZE);
     std::unique_ptr<u8[]> vram = std::make_unique<u8[]>(Memory::VRAM_SIZE);
     std::unique_ptr<u8[]> n3ds_extra_ram = std::make_unique<u8[]>(Memory::N3DS_EXTRA_RAM_SIZE);
     std::unique_ptr<u8[]> dsp_ram = std::make_unique<u8[]>(Memory::DSP_RAM_SIZE);
 
-    Core::System& system;
+    Core::MemoryEnvironment& environment;
     std::shared_ptr<PageTable> current_page_table = nullptr;
     RasterizerCacheMarker cache_marker;
     std::vector<std::shared_ptr<PageTable>> page_table_list;
@@ -119,7 +134,7 @@ public:
 
     PAddr plugin_fb_address{};
 
-    Impl(Core::System& system_);
+    Impl(Core::MemoryEnvironment& environment_);
 
     const u8* GetPtr(Region r) const {
         switch (r) {
@@ -158,7 +173,7 @@ public:
         case Region::DSP:
             return DSP_RAM_SIZE;
         case Region::FCRAM:
-            return FCRAM_N3DS_SIZE;
+            return FCRAM_ALLOCATED_SIZE;
         case Region::N3DS:
             return N3DS_EXTRA_RAM_SIZE;
         default:
@@ -167,7 +182,7 @@ public:
     }
 
     u32 GetPC() const noexcept {
-        return system.GetRunningCore().GetPC();
+        return environment.GetRunningCorePC();
     }
 
     template <bool UNSAFE>
@@ -315,22 +330,20 @@ public:
                 return;
             }
 
-            auto& renderer = system.GPU().Renderer();
             VAddr overlap_start = std::max(start, region_start);
             VAddr overlap_end = std::min(end, region_end);
             PAddr physical_start = paddr_region_start + (overlap_start - region_start);
             u32 overlap_size = overlap_end - overlap_start;
 
-            auto* rasterizer = renderer.Rasterizer();
             switch (mode) {
             case FlushMode::Flush:
-                rasterizer->FlushRegion(physical_start, overlap_size);
+                environment.FlushRegion(physical_start, overlap_size);
                 break;
             case FlushMode::Invalidate:
-                rasterizer->InvalidateRegion(physical_start, overlap_size);
+                environment.InvalidateRegion(physical_start, overlap_size);
                 break;
             case FlushMode::FlushAndInvalidate:
-                rasterizer->FlushAndInvalidateRegion(physical_start, overlap_size);
+                environment.FlushAndInvalidateRegion(physical_start, overlap_size);
                 break;
             }
         };
@@ -372,7 +385,11 @@ private:
 template <Region R>
 class MemorySystem::BackingMemImpl : public BackingMem {
 public:
+#if !defined(AZAHAR_VITA)
+    // Only reached by boost::serialization when reconstructing a backing memory object while
+    // loading a savestate. Serialization is disabled on Vita, so this constructor is too.
     BackingMemImpl() : impl(*Core::Global<Core::System>().Memory().impl) {}
+#endif
     explicit BackingMemImpl(MemorySystem::Impl& impl_) : impl(impl_) {}
     u8* GetPtr() override {
         return impl.GetPtr(R);
@@ -394,13 +411,23 @@ private:
     friend class boost::serialization::access;
 };
 
-MemorySystem::Impl::Impl(Core::System& system_)
-    : system{system_}, fcram_mem(std::make_shared<BackingMemImpl<Region::FCRAM>>(*this)),
+MemorySystem::Impl::Impl(Core::MemoryEnvironment& environment_)
+    : environment{environment_}, fcram_mem(std::make_shared<BackingMemImpl<Region::FCRAM>>(*this)),
       vram_mem(std::make_shared<BackingMemImpl<Region::VRAM>>(*this)),
       n3ds_extra_ram_mem(std::make_shared<BackingMemImpl<Region::N3DS>>(*this)),
       dsp_mem(std::make_shared<BackingMemImpl<Region::DSP>>(*this)) {}
 
-MemorySystem::MemorySystem(Core::System& system) : impl(std::make_unique<Impl>(system)) {}
+MemorySystem::MemorySystem(Core::MemoryEnvironment& environment)
+    : impl(std::make_unique<Impl>(environment)) {}
+
+#if !defined(AZAHAR_VITA)
+// The adapter itself (SystemMemoryEnvironment) lives in memory_environment.cpp, which is not
+// linked on Vita; this constructor stays here because it needs Impl's complete definition.
+MemorySystem::MemorySystem(Core::System& system)
+    : owned_environment(Core::MakeSystemMemoryEnvironment(system)),
+      impl(std::make_unique<Impl>(*owned_environment)) {}
+#endif
+
 MemorySystem::~MemorySystem() = default;
 
 template <class Archive>
@@ -427,6 +454,9 @@ PAddr& Memory::MemorySystem::Plugin3GXFramebufferAddress() {
 }
 
 void MemorySystem::RegisterWatchpoint(const Kernel::Process& process, VAddr addr, u32 size) {
+    // Only the GDB stub calls this, and it is not linked on Vita (see docs/vita-port.md), so the
+    // Region::Memory case below is unreachable there in practice; it is guarded because it needs
+    // PageTable::Pointers::Ref(), which is excluded on Vita along with the rest of 'refs'.
     auto& page_table = *process.vm_manager.page_table;
 
     VAddr current = addr;
@@ -445,11 +475,13 @@ void MemorySystem::RegisterWatchpoint(const Kernel::Process& process, VAddr addr
             PageType& type = page_table.attributes[page_index];
 
             switch (type) {
+#if !defined(AZAHAR_VITA)
             case PageType::Memory:
                 mem = page_table.pointers.Ref(page_index);
                 type = PageType::MemoryWatchpoint;
                 page_table.pointers[page_index] = nullptr;
                 break;
+#endif
             case PageType::RasterizerCachedMemory:
                 mem = GetPointerForRasterizerCache(page_base);
                 type = PageType::RasterizerCachedMemoryWatchpoint;
@@ -513,7 +545,7 @@ void MemorySystem::MapPages(PageTable& page_table, u32 base, u32 size, MemoryRef
     LOG_DEBUG(HW_Memory, "Mapping {} onto {:08X}-{:08X}", (void*)memory.GetPtr(),
               base * CITRA_PAGE_SIZE, (base + size) * CITRA_PAGE_SIZE);
 
-    if (impl->system.IsPoweredOn()) {
+    if (impl->environment.IsPoweredOn()) {
         RasterizerFlushVirtualRegion(base << CITRA_PAGE_BITS, size * CITRA_PAGE_SIZE,
                                      FlushMode::FlushAndInvalidate);
     }
@@ -578,8 +610,8 @@ void MemorySystem::UnmappedAccess(const VAddr vaddr, const T value, bool read) {
 #endif
     LOG_ERROR(HW_Memory, "{}", message);
     if (Settings::values.enable_exception_handler) {
-        Core::LogException(impl->system, read ? Core::ExceptionType::UnmappedRead
-                                              : Core::ExceptionType::UnmappedWrite);
+        impl->environment.LogUnmappedAccess(read ? Core::ExceptionType::UnmappedRead
+                                                 : Core::ExceptionType::UnmappedWrite);
     }
 }
 
@@ -613,7 +645,7 @@ T MemorySystem::Read(const std::shared_ptr<PageTable>& page_table, const VAddr v
 
         // MMIO (0x1xxxxxxx, >= IO_AREA_PADDR) - Strictly 32-bit
         if ((paddr & 0xF0000000) == 0x10000000 && paddr >= Memory::IO_AREA_PADDR) [[unlikely]] {
-            return static_cast<ReadType>(impl->system.GPU().ReadReg(
+            return static_cast<ReadType>(impl->environment.ReadIoRegister32(
                 static_cast<VAddr>(paddr) - Memory::IO_AREA_PADDR + 0x1EC00000));
         }
         // Fallthrough: Standard page table lookup
@@ -707,9 +739,9 @@ void MemorySystem::Write(const std::shared_ptr<PageTable>& page_table, const VAd
         // MMIO (0x1xxxxxxx, >= IO_AREA_PADDR) - Strictly 32-bit
         if ((paddr & 0xF0000000) == 0x10000000 && paddr >= Memory::IO_AREA_PADDR) [[unlikely]] {
             ASSERT(sizeof(data) == sizeof(u32));
-            impl->system.GPU().WriteReg(static_cast<VAddr>(paddr) - Memory::IO_AREA_PADDR +
-                                            0x1EC00000,
-                                        static_cast<u32>(data));
+            impl->environment.WriteIoRegister32(static_cast<VAddr>(paddr) - Memory::IO_AREA_PADDR +
+                                                    0x1EC00000,
+                                                static_cast<u32>(data));
             return;
         }
         // Fallthrough: Standard page table lookup
@@ -900,7 +932,7 @@ MemorySystem::PhysMemRegionInfo MemorySystem::GetPhysMemRegionInfo(PAddr address
     constexpr std::array memory_areas = {
         std::make_pair(VRAM_PADDR, VRAM_SIZE),
         std::make_pair(DSP_RAM_PADDR, DSP_RAM_SIZE),
-        std::make_pair(FCRAM_PADDR, FCRAM_N3DS_SIZE),
+        std::make_pair(FCRAM_PADDR, FCRAM_ALLOCATED_SIZE),
         std::make_pair(N3DS_EXTRA_RAM_PADDR, N3DS_EXTRA_RAM_SIZE),
     };
 
@@ -1089,7 +1121,7 @@ void MemorySystem::ReadBlock(const Kernel::Process& process, const VAddr src_add
 }
 
 void MemorySystem::ReadBlock(VAddr src_addr, void* dest_buffer, std::size_t size) {
-    const auto& process = *impl->system.Kernel().GetCurrentProcess();
+    const auto& process = *impl->environment.GetCurrentProcess();
     return impl->ReadBlockImpl<false>(process, src_addr, dest_buffer, size);
 }
 
@@ -1148,7 +1180,7 @@ void MemorySystem::WriteBlock(const Kernel::Process& process, const VAddr dest_a
 
 void MemorySystem::WriteBlock(const VAddr dest_addr, const void* src_buffer,
                               const std::size_t size) {
-    auto& process = *impl->system.Kernel().GetCurrentProcess();
+    auto& process = *impl->environment.GetCurrentProcess();
     return impl->WriteBlockImpl<false>(process, dest_addr, src_buffer, size);
 }
 
@@ -1268,22 +1300,22 @@ void MemorySystem::CopyBlock(const Kernel::Process& dest_process,
 }
 
 u32 MemorySystem::GetFCRAMOffset(const u8* pointer) const {
-    ASSERT(pointer >= impl->fcram.get() && pointer <= impl->fcram.get() + Memory::FCRAM_N3DS_SIZE);
+    ASSERT(pointer >= impl->fcram.get() && pointer <= impl->fcram.get() + Memory::FCRAM_ALLOCATED_SIZE);
     return static_cast<u32>(pointer - impl->fcram.get());
 }
 
 u8* MemorySystem::GetFCRAMPointer(std::size_t offset) {
-    ASSERT(offset <= Memory::FCRAM_N3DS_SIZE);
+    ASSERT(offset <= Memory::FCRAM_ALLOCATED_SIZE);
     return impl->fcram.get() + offset;
 }
 
 const u8* MemorySystem::GetFCRAMPointer(std::size_t offset) const {
-    ASSERT(offset <= Memory::FCRAM_N3DS_SIZE);
+    ASSERT(offset <= Memory::FCRAM_ALLOCATED_SIZE);
     return impl->fcram.get() + offset;
 }
 
 MemoryRef MemorySystem::GetFCRAMRef(std::size_t offset) const {
-    ASSERT(offset <= Memory::FCRAM_N3DS_SIZE);
+    ASSERT(offset <= Memory::FCRAM_ALLOCATED_SIZE);
     return MemoryRef(impl->fcram_mem, offset);
 }
 

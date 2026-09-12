@@ -12,6 +12,7 @@
 #include "common/common_types.h"
 #include "common/memory_ref.h"
 #include "common/swap.h"
+#include "core/memory_environment.h"
 
 namespace Kernel {
 class Process;
@@ -65,7 +66,11 @@ struct PageTable {
      */
 
     // The reason for this rigmarole is to keep the 'raw' and 'refs' arrays in sync.
-    // We need 'raw' for dynarmic and 'refs' for serialization
+    // We need 'raw' for dynarmic and 'refs' for serialization and watchpoints (used to recover a
+    // page's MemoryRef when the GDB stub registers a watchpoint over it). Neither the GDB stub nor
+    // serialization is part of the Vita port's scope (see docs/vita-port.md), and 'refs' alone is
+    // roughly 24 MiB (PAGE_TABLE_NUM_ENTRIES MemoryRef entries) per page table, so it is dropped
+    // there; RegisterWatchpoint/UnregisterWatchpoint become no-ops on Vita (see memory.cpp).
     struct Pointers {
 
         struct Entry {
@@ -73,7 +78,9 @@ struct PageTable {
 
             Entry& operator=(MemoryRef value) {
                 pointers.raw[idx] = value.GetPtr();
+#if !defined(AZAHAR_VITA)
                 pointers.refs[idx] = std::move(value);
+#endif
                 return *this;
             }
 
@@ -90,13 +97,17 @@ struct PageTable {
             return Entry(*this, static_cast<VAddr>(idx));
         }
 
+#if !defined(AZAHAR_VITA)
         const MemoryRef& Ref(std::size_t idx) {
             return refs[idx];
         }
+#endif
 
     private:
         std::array<u8*, PAGE_TABLE_NUM_ENTRIES> raw;
+#if !defined(AZAHAR_VITA)
         std::array<MemoryRef, PAGE_TABLE_NUM_ENTRIES> refs;
+#endif
         friend struct PageTable;
     };
 
@@ -131,6 +142,7 @@ struct PageTable {
     void Clear();
 
 private:
+#if !defined(AZAHAR_VITA)
     template <class Archive>
     void serialize(Archive& ar, const unsigned int) {
         ar & pointers.refs;
@@ -141,6 +153,7 @@ private:
         }
     }
     friend class boost::serialization::access;
+#endif
 };
 
 /// Physical memory regions as seen from the ARM11
@@ -266,6 +279,7 @@ enum class FlushMode {
 
 class MemorySystem {
 public:
+    explicit MemorySystem(Core::MemoryEnvironment& environment);
     explicit MemorySystem(Core::System& system);
     ~MemorySystem();
 
@@ -750,6 +764,9 @@ private:
     void MapPages(PageTable& page_table, u32 base, u32 size, MemoryRef memory, PageType type);
 
 private:
+    // Declared before impl so it is constructed first when MemorySystem(Core::System&) is used;
+    // null when constructed directly from a caller-owned Core::MemoryEnvironment.
+    std::unique_ptr<Core::MemoryEnvironment> owned_environment;
     class Impl;
     std::unique_ptr<Impl> impl;
 
