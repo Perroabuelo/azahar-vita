@@ -31,3 +31,10 @@ using its libretro frontend immediately would hide platform failures behind Retr
 Milestone 1 is complete when a Vita build executes a deterministic group of ARM11 instructions via
 Azahar's DynCom interpreter and records the expected register values in the boot log. It does not
 need to load a commercial game.
+
+## Validation status
+
+Milestone 0 was completed on physical Vita hardware on 2026-09-11. Both the forced-failure path and
+the normal six-band probe were verified with VitaSDK 2026.08; the normal run recorded every expected
+check as `PASS` and exited through the START input. The validated VPK SHA-256 is
+`fd26bd100970fbaf0fc9ab3d565b7caa4a3096bc993d66576fc1a573eb9d1e6b`.
