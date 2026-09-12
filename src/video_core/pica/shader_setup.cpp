@@ -15,7 +15,11 @@
 #include <nmmintrin.h>
 #endif
 
-#if defined(__aarch64__) || defined(__ARM_NEON)
+// ProcessBlockNEON below uses vmaxvq_u32, a horizontal-reduction intrinsic only available on
+// AArch64 NEON, not on ARMv7 NEON (e.g. the Vita's Cortex-A9): defined(__ARM_NEON) alone would match
+// both and fail to compile on the latter. ARMv7 NEON falls back to the plain scalar loop in
+// UpdateProgramCodeRange/UpdateSwizzleDataRange below instead - correct either way, just unoptimized.
+#if defined(__aarch64__)
 #define CITRA_HAS_NEON
 #include <arm_neon.h>
 #endif
