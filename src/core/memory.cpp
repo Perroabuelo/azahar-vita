@@ -53,8 +53,15 @@ namespace Memory {
 // FCRAM does not fit the platform's memory budget. KernelSystem::MemoryInit (hle/kernel/memory.cpp)
 // enforces that this stays paired with an Old 3DS MemoryMode and Settings::values.is_new_3ds=false.
 constexpr auto FCRAM_ALLOCATED_SIZE = FCRAM_SIZE;
+// New 3DS extra RAM is only ever mapped for a title whose ExHeader asks for it (see
+// HandleSpecialMapping in hle/kernel/memory.cpp), and such a title is New-3DS-exclusive - refused
+// on an Old 3DS memory map before it could reach this region (see Core::System's is_new_3ds
+// check). A build that only ever runs Old 3DS software therefore never touches it, so Hito 4 skips
+// the 4 MiB allocation entirely instead of paying for a region nothing can reach.
+constexpr u32 N3DS_EXTRA_RAM_ALLOCATED_SIZE = 0;
 #else
 constexpr auto FCRAM_ALLOCATED_SIZE = FCRAM_N3DS_SIZE;
+constexpr u32 N3DS_EXTRA_RAM_ALLOCATED_SIZE = N3DS_EXTRA_RAM_SIZE;
 #endif
 
 void PageTable::Clear() {
@@ -113,16 +120,89 @@ private:
     }
 };
 
+/// Owns one of MemorySystem's four backing regions, obtained from and returned to a
+/// Core::MemoryEnvironment (see AllocateBackingMemory/FreeBackingMemory) rather than the plain
+/// heap directly. This is what lets a caller-supplied environment measure, name, or fail each
+/// region independently instead of the four disappearing into one anonymous heap reservation. A
+/// null Get() means either the region was never requested (`requested_size == 0`, e.g. N3DS extra
+/// RAM on Vita's Old-3DS-only build) or the environment refused it (Failed() tells them apart).
+class BackingBuffer {
+public:
+    BackingBuffer() = default;
+    BackingBuffer(Core::MemoryEnvironment& environment_, Region region_, u32 size_)
+        : environment(&environment_), region(region_), requested_size(size_) {
+        if (requested_size > 0) {
+            data = environment->AllocateBackingMemory(region, requested_size);
+        }
+    }
+
+    ~BackingBuffer() {
+        Release();
+    }
+
+    BackingBuffer(const BackingBuffer&) = delete;
+    BackingBuffer& operator=(const BackingBuffer&) = delete;
+
+    BackingBuffer(BackingBuffer&& other) noexcept {
+        *this = std::move(other);
+    }
+
+    BackingBuffer& operator=(BackingBuffer&& other) noexcept {
+        if (this != &other) {
+            Release();
+            environment = other.environment;
+            region = other.region;
+            requested_size = other.requested_size;
+            data = other.data;
+            other.environment = nullptr;
+            other.data = nullptr;
+            other.requested_size = 0;
+        }
+        return *this;
+    }
+
+    [[nodiscard]] u8* Get() const {
+        return data;
+    }
+
+    /// What this build asked for, independent of whether the request succeeded (0 if the region
+    /// was never requested at all).
+    [[nodiscard]] u32 RequestedSize() const {
+        return requested_size;
+    }
+
+    /// True only when a non-zero request came back null - never true for a region that was never
+    /// requested in the first place.
+    [[nodiscard]] bool Failed() const {
+        return requested_size > 0 && data == nullptr;
+    }
+
+private:
+    void Release() {
+        if (environment != nullptr) {
+            environment->FreeBackingMemory(region, data, requested_size);
+        }
+    }
+
+    Core::MemoryEnvironment* environment{};
+    Region region{};
+    u32 requested_size{};
+    u8* data{};
+};
+
 class MemorySystem::Impl {
 public:
-    // Visual Studio would try to allocate these on compile time
-    // if they are std::array which would exceed the memory limit.
-    std::unique_ptr<u8[]> fcram = std::make_unique<u8[]>(Memory::FCRAM_ALLOCATED_SIZE);
-    std::unique_ptr<u8[]> vram = std::make_unique<u8[]>(Memory::VRAM_SIZE);
-    std::unique_ptr<u8[]> n3ds_extra_ram = std::make_unique<u8[]>(Memory::N3DS_EXTRA_RAM_SIZE);
-    std::unique_ptr<u8[]> dsp_ram = std::make_unique<u8[]>(Memory::DSP_RAM_SIZE);
-
     Core::MemoryEnvironment& environment;
+
+    // The four large regions backing emulated physical memory. Each is requested from and
+    // returned to `environment` (see BackingBuffer above) instead of being an unconditional
+    // make_unique<u8[]> straight off the heap, so a caller-supplied environment can measure, name,
+    // or fail each one independently (see docs/vita-port.md's Hito 4 notes).
+    BackingBuffer fcram;
+    BackingBuffer vram;
+    BackingBuffer n3ds_extra_ram;
+    BackingBuffer dsp_ram;
+
     std::shared_ptr<PageTable> current_page_table = nullptr;
     RasterizerCacheMarker cache_marker;
     std::vector<std::shared_ptr<PageTable>> page_table_list;
@@ -139,13 +219,13 @@ public:
     const u8* GetPtr(Region r) const {
         switch (r) {
         case Region::VRAM:
-            return vram.get();
+            return vram.Get();
         case Region::DSP:
-            return dsp_ram.get();
+            return dsp_ram.Get();
         case Region::FCRAM:
-            return fcram.get();
+            return fcram.Get();
         case Region::N3DS:
-            return n3ds_extra_ram.get();
+            return n3ds_extra_ram.Get();
         default:
             UNREACHABLE();
         }
@@ -154,13 +234,13 @@ public:
     u8* GetPtr(Region r) {
         switch (r) {
         case Region::VRAM:
-            return vram.get();
+            return vram.Get();
         case Region::DSP:
-            return dsp_ram.get();
+            return dsp_ram.Get();
         case Region::FCRAM:
-            return fcram.get();
+            return fcram.Get();
         case Region::N3DS:
-            return n3ds_extra_ram.get();
+            return n3ds_extra_ram.Get();
         default:
             UNREACHABLE();
         }
@@ -175,10 +255,30 @@ public:
         case Region::FCRAM:
             return FCRAM_ALLOCATED_SIZE;
         case Region::N3DS:
-            return N3DS_EXTRA_RAM_SIZE;
+            return N3DS_EXTRA_RAM_ALLOCATED_SIZE;
         default:
             UNREACHABLE();
         }
+    }
+
+    [[nodiscard]] bool IsInitialized() const {
+        return !fcram.Failed() && !vram.Failed() && !dsp_ram.Failed() && !n3ds_extra_ram.Failed();
+    }
+
+    [[nodiscard]] std::optional<Region> GetFailedItem() const {
+        if (fcram.Failed()) {
+            return Region::FCRAM;
+        }
+        if (vram.Failed()) {
+            return Region::VRAM;
+        }
+        if (dsp_ram.Failed()) {
+            return Region::DSP;
+        }
+        if (n3ds_extra_ram.Failed()) {
+            return Region::N3DS;
+        }
+        return std::nullopt;
     }
 
     u32 GetPC() const noexcept {
@@ -362,12 +462,12 @@ private:
     void serialize(Archive& ar, const unsigned int file_version) {
         bool save_n3ds_ram = Settings::values.is_new_3ds.GetValue();
         ar & save_n3ds_ram;
-        ar& boost::serialization::make_binary_object(vram.get(), Memory::VRAM_SIZE);
+        ar& boost::serialization::make_binary_object(vram.Get(), Memory::VRAM_SIZE);
         ar& boost::serialization::make_binary_object(
-            fcram.get(), save_n3ds_ram ? Memory::FCRAM_N3DS_SIZE : Memory::FCRAM_SIZE);
+            fcram.Get(), save_n3ds_ram ? Memory::FCRAM_N3DS_SIZE : Memory::FCRAM_SIZE);
         ar& boost::serialization::make_binary_object(
-            n3ds_extra_ram.get(), save_n3ds_ram ? Memory::N3DS_EXTRA_RAM_SIZE : 0);
-        ar& boost::serialization::make_binary_object(dsp_ram.get(), Memory::DSP_RAM_SIZE);
+            n3ds_extra_ram.Get(), save_n3ds_ram ? Memory::N3DS_EXTRA_RAM_SIZE : 0);
+        ar& boost::serialization::make_binary_object(dsp_ram.Get(), Memory::DSP_RAM_SIZE);
         ar & cache_marker;
         ar & page_table_list;
         // dsp is set from Core::System at startup
@@ -412,7 +512,11 @@ private:
 };
 
 MemorySystem::Impl::Impl(Core::MemoryEnvironment& environment_)
-    : environment{environment_}, fcram_mem(std::make_shared<BackingMemImpl<Region::FCRAM>>(*this)),
+    : environment{environment_}, fcram(environment_, Region::FCRAM, Memory::FCRAM_ALLOCATED_SIZE),
+      vram(environment_, Region::VRAM, Memory::VRAM_SIZE),
+      n3ds_extra_ram(environment_, Region::N3DS, Memory::N3DS_EXTRA_RAM_ALLOCATED_SIZE),
+      dsp_ram(environment_, Region::DSP, Memory::DSP_RAM_SIZE),
+      fcram_mem(std::make_shared<BackingMemImpl<Region::FCRAM>>(*this)),
       vram_mem(std::make_shared<BackingMemImpl<Region::VRAM>>(*this)),
       n3ds_extra_ram_mem(std::make_shared<BackingMemImpl<Region::N3DS>>(*this)),
       dsp_mem(std::make_shared<BackingMemImpl<Region::DSP>>(*this)) {}
@@ -429,6 +533,25 @@ MemorySystem::MemorySystem(Core::System& system)
 #endif
 
 MemorySystem::~MemorySystem() = default;
+
+bool MemorySystem::IsInitialized() const {
+    return impl->IsInitialized();
+}
+
+std::optional<Region> MemorySystem::GetFailedItem() const {
+    return impl->GetFailedItem();
+}
+
+u32 MemorySystem::GetAllocatedBytes(Region item) const {
+    return impl->GetSize(item);
+}
+
+u64 MemorySystem::GetTotalAllocatedBytes() const {
+    return static_cast<u64>(impl->GetSize(Region::FCRAM)) +
+           static_cast<u64>(impl->GetSize(Region::VRAM)) +
+           static_cast<u64>(impl->GetSize(Region::DSP)) +
+           static_cast<u64>(impl->GetSize(Region::N3DS));
+}
 
 template <class Archive>
 void MemorySystem::serialize(Archive& ar, const unsigned int file_version) {
@@ -933,7 +1056,13 @@ MemorySystem::PhysMemRegionInfo MemorySystem::GetPhysMemRegionInfo(PAddr address
         std::make_pair(VRAM_PADDR, VRAM_SIZE),
         std::make_pair(DSP_RAM_PADDR, DSP_RAM_SIZE),
         std::make_pair(FCRAM_PADDR, FCRAM_ALLOCATED_SIZE),
+#if !defined(AZAHAR_VITA)
+        // Not a valid physical target on Vita: N3DS_EXTRA_RAM_ALLOCATED_SIZE is 0 there (see
+        // above), so impl->n3ds_extra_ram_mem backs nothing. Dropping the entry means an address
+        // in this range falls through to the "unknown" branch below instead of resolving to a
+        // region whose backing pointer is null.
         std::make_pair(N3DS_EXTRA_RAM_PADDR, N3DS_EXTRA_RAM_SIZE),
+#endif
     };
 
     const auto area = std::find_if(memory_areas.begin(), memory_areas.end(), [&](const auto& area) {
@@ -959,9 +1088,11 @@ MemorySystem::PhysMemRegionInfo MemorySystem::GetPhysMemRegionInfo(PAddr address
     case FCRAM_PADDR:
         phys_mem_region_info_cache = {&impl->fcram_mem, area->first, area->second};
         break;
+#if !defined(AZAHAR_VITA)
     case N3DS_EXTRA_RAM_PADDR:
         phys_mem_region_info_cache = {&impl->n3ds_extra_ram_mem, area->first, area->second};
         break;
+#endif
     default:
         UNREACHABLE();
     }
@@ -1300,18 +1431,18 @@ void MemorySystem::CopyBlock(const Kernel::Process& dest_process,
 }
 
 u32 MemorySystem::GetFCRAMOffset(const u8* pointer) const {
-    ASSERT(pointer >= impl->fcram.get() && pointer <= impl->fcram.get() + Memory::FCRAM_ALLOCATED_SIZE);
-    return static_cast<u32>(pointer - impl->fcram.get());
+    ASSERT(pointer >= impl->fcram.Get() && pointer <= impl->fcram.Get() + Memory::FCRAM_ALLOCATED_SIZE);
+    return static_cast<u32>(pointer - impl->fcram.Get());
 }
 
 u8* MemorySystem::GetFCRAMPointer(std::size_t offset) {
     ASSERT(offset <= Memory::FCRAM_ALLOCATED_SIZE);
-    return impl->fcram.get() + offset;
+    return impl->fcram.Get() + offset;
 }
 
 const u8* MemorySystem::GetFCRAMPointer(std::size_t offset) const {
     ASSERT(offset <= Memory::FCRAM_ALLOCATED_SIZE);
-    return impl->fcram.get() + offset;
+    return impl->fcram.Get() + offset;
 }
 
 MemoryRef MemorySystem::GetFCRAMRef(std::size_t offset) const {
@@ -1321,7 +1452,7 @@ MemoryRef MemorySystem::GetFCRAMRef(std::size_t offset) const {
 
 u8* MemorySystem::GetDspMemory(std::size_t offset) const {
     ASSERT(offset <= Memory::DSP_RAM_SIZE);
-    return impl->dsp_ram.get() + offset;
+    return impl->dsp_ram.Get() + offset;
 }
 
 } // namespace Memory

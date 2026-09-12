@@ -54,8 +54,13 @@ void KernelSystem::MemoryInit(MemoryMode memory_mode, u64 override_init_time) {
         base += memory_regions[i]->size;
     }
 
-    // We must've allocated the entire FCRAM by the end
-    ASSERT(base == (is_new_3ds ? Memory::FCRAM_N3DS_SIZE : Memory::FCRAM_SIZE));
+    // We must've allocated the entire FCRAM by the end. This is already a logged failure (ASSERT
+    // flushes the log before crashing), not a silent one - the message is spelled out because a
+    // bare size mismatch wouldn't say why: on Vita this can only fire if something set
+    // Settings::values.is_new_3ds despite the port only supporting the Old 3DS memory map (see
+    // Memory::FCRAM_ALLOCATED_SIZE in core/memory.cpp).
+    ASSERT_MSG(base == (is_new_3ds ? Memory::FCRAM_N3DS_SIZE : Memory::FCRAM_SIZE),
+               "FCRAM region size mismatch for is_new_3ds={}", is_new_3ds);
 
     config_mem_handler = std::make_shared<ConfigMem::Handler>();
     auto& config_mem = config_mem_handler->GetConfigMem();
@@ -122,7 +127,14 @@ void KernelSystem::HandleSpecialMapping(VMManager& address_space, const AddressM
         {VRAM_VADDR, VRAM_PADDR, VRAM_SIZE},
         {IO_AREA_VADDR, IO_AREA_PADDR, IO_AREA_SIZE},
         {DSP_RAM_VADDR, DSP_RAM_PADDR, DSP_RAM_SIZE},
+#if !defined(AZAHAR_VITA)
+        // Only a New 3DS-exclusive title's ExHeader asks for this, and such a title is already
+        // refused on the Old 3DS memory map Vita always uses (see core/memory.cpp's
+        // N3DS_EXTRA_RAM_ALLOCATED_SIZE), so it can never legitimately be requested there. Leaving
+        // the entry out drops any such request into the "Unhandled special mapping" LOG_ERROR
+        // below instead of resolving to a physical address with no backing memory.
         {N3DS_EXTRA_RAM_VADDR, N3DS_EXTRA_RAM_PADDR, N3DS_EXTRA_RAM_SIZE - 0x20000},
+#endif
     };
 
     VAddr mapping_limit = mapping.address + mapping.size;

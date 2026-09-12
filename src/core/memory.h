@@ -197,7 +197,9 @@ enum : PAddr {
     FCRAM_N3DS_PADDR_END = FCRAM_PADDR + FCRAM_N3DS_SIZE,
 };
 
-enum class Region { FCRAM, VRAM, DSP, N3DS };
+// Region is defined in core/memory_environment.h (included above), not here: it is also the type
+// Core::MemoryEnvironment::AllocateBackingMemory takes, and that header cannot include this one
+// back.
 
 /// Virtual user-space memory regions
 enum : VAddr {
@@ -279,9 +281,35 @@ enum class FlushMode {
 
 class MemorySystem {
 public:
+    /// Constructs directly over a caller-supplied environment (used when there is no
+    /// Core::System, e.g. the Vita probes). Allocating the four backing regions
+    /// (Core::MemoryEnvironment::AllocateBackingMemory) can fail without throwing: the constructor
+    /// always finishes building a complete, destructible object, even if some region ended up
+    /// null. Call IsInitialized() before doing anything else with it; if it's false, destroy this
+    /// MemorySystem and report the failure through GetFailedItem() instead of using it further.
     explicit MemorySystem(Core::MemoryEnvironment& environment);
     explicit MemorySystem(Core::System& system);
     ~MemorySystem();
+
+    /// True once every backing region this build allocates was granted successfully. Always true
+    /// on the default (plain heap) Core::MemoryEnvironment; can be false when a caller-supplied
+    /// environment's AllocateBackingMemory returned nullptr for a region this build requests a
+    /// non-zero size for (see GetAllocatedBytes - a region with a planned size of 0, such as N3DS
+    /// extra RAM on Vita's Old-3DS-only build, is never requested and can't cause this to be
+    /// false).
+    [[nodiscard]] bool IsInitialized() const;
+
+    /// The first region (checked in FCRAM, VRAM, DSP, N3DS order) whose allocation failed, or
+    /// nullopt if IsInitialized() is true.
+    [[nodiscard]] std::optional<Region> GetFailedItem() const;
+
+    /// Bytes requested for one backing region. 0 for a region this build doesn't allocate at all
+    /// (e.g. Region::N3DS on Vita), regardless of whether allocation succeeded.
+    [[nodiscard]] u32 GetAllocatedBytes(Region item) const;
+
+    /// Sum of GetAllocatedBytes() over the four regions - the "emulated memory" line of a memory
+    /// budget, as opposed to the page table, kernel objects, or caches around it.
+    [[nodiscard]] u64 GetTotalAllocatedBytes() const;
 
     /**
      * Maps an allocated buffer onto a region of the emulated process address space.
