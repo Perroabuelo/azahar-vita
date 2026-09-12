@@ -51,5 +51,13 @@ PASS VPK contents and SFO metadata
 PASS forbidden dependency symbol audit
 PASS scalar FindMinMax regression
 
-Physical Vita validation: PENDING
-Milestone 1: IN PHYSICAL VALIDATION
+Physical Vita validation:
+PASS forced-failure path code=0xA1000001 result=FAIL
+PASS normal six-band probe launched three times
+PASS logger, common types, serialization, timer, filesystem, memory, controller, and cleanup
+PASS final normal run result=PASS with no FAIL records
+PASS user memory stable across probe checks (126877696 bytes before and after)
+PASS framebuffer released on exit through START
+
+Physical validation date: 2026-09-11
+Milestone 1: COMPLETE

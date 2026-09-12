@@ -1,0 +1,10 @@
+[   0.007493] Common <Info> common_main.cpp:main:215: common_probe_version=01.00
+[   0.032053] Common <Info> common_main.cpp:main:235: PASS logger backend=vita path=ux0:data/azahar-vita/boot.log
+[   0.032476] Common <Info> common_main.cpp:main:244: PASS common types=ok atomic_bits=32 math=ok
+[   0.033126] Common <Info> common_main.cpp:main:249: PASS serialization type=ParamPackage escaping=ok
+[   0.053696] Common <Info> common_main.cpp:main:255: PASS timer elapsed_ms=20
+[   0.077684] Common.Filesystem <Info> common_main.cpp:main:260: PASS filesystem roundtrip=create-read-rename-delete
+[   0.080401] Common.Memory <Info> common_main.cpp:main:268: PASS memory total=536870912 page=4096 heap_used=21472 user_free_before=126877696 user_free_after=126877696 cdram_free_before=117440512 cdram_free_after=115343360 phycont_free=27262976
+[   8.723553] Common <Info> common_main.cpp:main:294: PASS controller input=start
+[   8.740260] Common <Info> common_main.cpp:main:299: PASS cleanup framebuffer=released
+[   8.745725] Common <Info> common_main.cpp:main:300: RESULT PASS
