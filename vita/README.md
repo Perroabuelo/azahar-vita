@@ -415,20 +415,17 @@ The VPK uses title ID `AZHV00006`, version `00.01`, and title
 
 ## Hito 5 physical validation
 
-This validation has not been run yet - the software build is complete and passes on the desktop
-reference and via cross-compilation, but no VPK from this milestone has been installed on a Vita.
-The procedure, once hardware is available:
-
 1. Install `build-vita/hito5-failure/azahar_vita_render_probe.vpk`. It must show alternating
    magenta/black bands, log `FAIL forced_failure code=0xA5000001` and `RESULT FAIL`, then exit after
    five seconds.
 2. Install `build-vita/hito5-cmake/azahar_vita_render_probe.vpk`. It must show a dark-gray
-   background with the rendered top screen (400x240, flat green from `guest_frame`) and bottom
-   screen (320x240, same flat green via `regs_lcd.color_fill_bottom`) composited onto it - not color
-   bands, unlike every earlier milestone's probe. Give it time before assuming it is unresponsive:
-   the software rasterizer with an interpreted vertex shader is slow on real ARMv7 hardware, and
-   `PASS render_progress group=...` lines in `boot.log` distinguish a slow run from a stuck one, the
-   same lesson Hito 4's physical testing already established.
+   background with the rendered top screen (64x64, `guest_frame`'s render target aliased directly
+   into the LCD framebuffer - see docs/vita-port.md) and bottom screen (320x240, flat green via
+   `regs_lcd.color_fill_bottom`) composited onto it - not color bands, unlike every earlier
+   milestone's probe. Give it time before assuming it is unresponsive: the software rasterizer with
+   an interpreted vertex shader is slow on real ARMv7 hardware, and `PASS render_progress group=...`
+   lines in `boot.log` distinguish a slow run from a stuck one, the same lesson Hito 4's physical
+   testing already established.
 3. Launch the normal probe three times. Every run must contain seven `PASS group=` records
    (`renderer_init`, `color_fill`, `framebuffer_formats`, `transfer_engine`, `triangle_raster`,
    `textured_quad`, `guest_frame`) with the same signatures as the desktop reference, a `PASS
@@ -438,6 +435,29 @@ The procedure, once hardware is available:
    `validate-hito5.sh` prints the reference hashes to compare against.
 5. Retain the forced log, normal log, both recovered PPM captures, desktop output, SDK version,
    commit, sizes, hashes, and validator output under `build-vita/evidence/hito-5/`.
+
+The first physical attempt crashed natively on every launch of the normal probe, with `boot.log`
+stopping right after `PASS logger` - confirmed as a genuine crash, not a controlled failure, by two
+recovered `psp2core-*.psp2dmp` core dumps (decompress with gzip; each is a standard ELF32 ARM core
+file, though `arm-vita-eabi-gdb` does not decode Sony's custom `PT_NOTE` register layout - the
+`THREAD_INFO`/`THREAD_REG_INFO`/`MODULE_INFO` notes were parsed by hand instead, following
+[xyzz/vita-parse-core](https://github.com/xyzz/vita-parse-core)'s documented struct layout). Both
+dumps decoded to the identical "Undefined instruction exception" on the main thread, at the same
+offset relative to the ELF's load base in both dumps, with `r3`/`r12` holding the `0xdeadbeef`
+poison pattern and the faulting PC inside an unrelated global rather than any real function.
+`SwRenderer::RasterizerSoftware` is the only place in this build that constructs a
+`Common::ThreadWorker` (`std::jthread`/`std::stop_token`), and this is the first Vita milestone to
+construct one at all; VitaSDK's C++20 standard library does not support this on real hardware, even
+though it compiles and links cleanly and had already passed cross-compilation. Fixed by never
+constructing a real `std::jthread` under `AZAHAR_VITA` (`RasterizerSoftware`'s scanlines now run
+directly on the calling thread instead - see `src/video_core/renderer_software/sw_rasterizer.cpp`),
+confirmed byte-for-byte unchanged on the desktop reference before and after. The corrected build then
+passed three consecutive launches: `RESULT PASS groups=7` with all seven signatures matching the
+desktop reference, both screens visible, `user_free` stable, and the recovered PPM captures hashing
+identically to the desktop reference's own.
+
+This validation was completed on 2026-09-12; the retained evidence in `build-vita/evidence/hito-5/`
+is the canonical record, and reflects the corrected build rather than the first, crashing attempt.
 
 ## Porting order
 

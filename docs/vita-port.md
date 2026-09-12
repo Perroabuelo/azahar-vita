@@ -93,14 +93,14 @@ matched the desktop reference's signatures exactly across three consecutive laun
 `_newlib_heap_size_user` confirmed in the log. Two design errors surfaced by that same physical
 testing were fixed and reverified before this closure - see "Milestone 4 closure" below.
 
-Milestone 5's software build is complete but not yet physically validated: the seven-group render
-corpus passes identically on the desktop reference (`azahar_render_host_probe`, all seven groups
-`PASS`, `RESULT PASS groups=7`, stable across repeated runs) and the Vita probe cross-compiles
-cleanly for ARMv7 with `vita/scripts/validate-hito5.sh` passing end to end, including the ELF/VPK
-structure, required symbols, translation-cache size, BSS budget, and the forbidden-dependency audit.
-Physical validation on real hardware - the three-launch procedure in "Hito 5" below, comparing the
-recovered `boot.log` and PPM captures against this same desktop reference - has not been run yet;
-see "Milestone 5 physical validation" for what remains.
+Milestone 5 was completed on physical Vita hardware on 2026-09-12. All seven render corpus groups
+(`renderer_init`, `color_fill`, `framebuffer_formats`, `transfer_engine`, `triangle_raster`,
+`textured_quad`, `guest_frame`) matched the desktop reference's signatures exactly across three
+consecutive launches, both rendered screens (not color bands) were visible on the physical panel,
+`user_free` was stable at 91,226,112 bytes before and after, and the recovered `hito5-top.ppm`/
+`hito5-bottom.ppm` hashed identically to the desktop reference's own captures. One design error
+surfaced by that same physical testing was found and fixed before this closure - see "Milestone 5
+closure" below.
 
 ## Milestone 4 closure
 
@@ -285,3 +285,22 @@ Signature rules are unchanged from milestones 2-4: nothing host-dependent (`size
 `TRANS_CACHE_SIZE`, thread-worker count, live memory readings) is folded into a group's signature.
 The PPM captures are the one new form of evidence this milestone adds - their SHA-256 hashes, not
 just the corpus signatures, must match between the desktop reference and the recovered Vita output.
+
+Physical testing on 2026-09-12 found a third, hardware-only issue that cross-compiling could not
+have caught: the normal probe crashed natively on every launch, with `boot.log` stopping right after
+`PASS logger`. Two recovered `psp2core-*.psp2dmp` core dumps both decoded to the same "Undefined
+instruction exception" on the main thread, at the identical offset relative to the ELF's load base
+in both dumps (deterministic, not a transient fault), with `r3` and `r12` both holding the classic
+`0xdeadbeef` poison pattern and the faulting PC landing inside an unrelated global
+(`Settings::values`) rather than any real function - executing through a garbage function pointer.
+`SwRenderer::RasterizerSoftware` is the only place in this whole build that constructs a
+`Common::ThreadWorker` (`std::jthread` + `std::stop_token`), and this is the first Vita milestone to
+construct one at all - VitaSDK's C++20 standard library does not support this on real hardware, even
+though it compiles and links cleanly (the ARMv7 cross-compile above had already passed). Fixed by
+never constructing a real `std::jthread` under `AZAHAR_VITA`: `num_sw_threads` becomes `0` (an empty
+`std::vector<std::jthread>` never instantiates `std::jthread`'s own constructor), and
+`RasterizerSoftware::ProcessTriangle` calls each scanline directly on the calling thread instead of
+through `QueueWork`/`WaitForRequests` - correct either way, since scanlines have no cross-scanline
+dependencies, and confirmed byte-for-byte unchanged on the desktop reference (same seven signatures,
+same two PPM hashes, before and after the fix). The corrected build then passed three consecutive
+physical launches with every signature and both PPM captures matching the desktop reference exactly.
