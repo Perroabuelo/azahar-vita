@@ -1,0 +1,4 @@
+[   0.012212] Common <Info> common_main.cpp:main:215: common_probe_version=01.00
+[   0.024348] Common <Info> common_main.cpp:main:235: PASS logger backend=vita path=ux0:data/azahar-vita/boot.log
+[   0.024670] Common <Error> common_main.cpp:Fail:141: FAIL forced_failure code=0xA1000001
+[   0.024964] Common <Error> common_main.cpp:Fail:142: RESULT FAIL
