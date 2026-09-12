@@ -39,7 +39,7 @@ La compatibilidad completa con el catálogo de 3DS no forma parte del alcance in
 | 2 | Intérprete ARM11 ejecutando pruebas deterministas | Completo |
 | 3 | Loader, memoria y kernel HLE ejecutando homebrew sin video | Completo |
 | 4 | Presupuesto de memoria estable y medible | Completo |
-| 5 | Imagen correcta mediante renderizador de referencia | Pendiente |
+| 5 | Imagen correcta mediante renderizador de referencia | Software completo, validación física pendiente |
 | 6 | Backend gráfico acelerado para Vita | Pendiente |
 | 7 | Controles, táctil e interfaz mínima | Pendiente |
 | 8 | Audio nativo estable | Pendiente |
@@ -198,6 +198,27 @@ resultado al framebuffer de Vita.
 - colores, texturas y coordenadas básicas son correctos;
 - pueden generarse capturas comparables con Azahar de escritorio;
 - no se exige todavía velocidad jugable.
+
+El software del Hito 5 está completo y validado contra la referencia de escritorio, pero aún no en
+hardware físico. `Core::MemoryEnvironment` gana un hermano, `VideoCore::RendererEnvironment`
+(`src/video_core/renderer_environment.h`), que permite enlazar el renderizador por software real de
+Azahar (`Pica::PicaCore`, `SwRenderer::RasterizerSoftware`/`RendererSoftware`/`SwBlitter`, el
+intérprete de shaders PICA) sin `Core::System` ni `Frontend::EmuWindow`, siguiendo el mismo patrón
+que los Hitos 3 y 4. El corpus determinista (`vita/src/render_corpus.cpp`) añade siete grupos
+(`renderer_init`, `color_fill`, `framebuffer_formats`, `transfer_engine`, `triangle_raster`,
+`textured_quad`, `guest_frame`), compartidos entre la referencia de escritorio y la sonda Vita como
+en los hitos anteriores; `guest_frame` extiende el patrón del homebrew sintético del Hito 3 con un
+nuevo SVC de sonda que hace de puente hacia `Pica::PicaCore::ProcessCmdList` mientras no exista un
+servicio GSP real. Las siete pruebas pasan de forma idéntica en la referencia de escritorio
+(`azahar_render_host_probe`, `RESULT PASS groups=7`, estable en ejecuciones repetidas) y la sonda
+Vita compila limpiamente para ARMv7 (`vita/scripts/validate-hito5.sh` completo, incluyendo símbolos,
+tamaño de caché de traducción, presupuesto de BSS y auditoría de dependencias prohibidas). Compilar
+para ARMv7 encontró y corrigió dos problemas reales de portabilidad en `video_core` no ejercitados
+por ningún hito anterior (un enum de registro sin tipo subyacente fijo que ARM EABI dimensiona de
+forma distinta a x86-64, y un intrínseco NEON exclusivo de AArch64 usado bajo una comprobación que
+también coincidía con NEON de ARMv7) - ver "Milestone 5 closure" en `docs/vita-port.md` para el
+detalle. La validación física en hardware real - la única parte de este hito que falta - se deja
+para cuando el usuario pueda ejecutar el VPK en su Vita.
 
 ## Hito 6 — Backend gráfico acelerado
 
@@ -364,9 +385,11 @@ contribuciones de la comunidad.
 
 ## Próximas acciones
 
-1. Iniciar el Hito 5 (renderizador de referencia): llevar el renderizador por software de Azahar a
-   la build de Vita y copiar su resultado al framebuffer, reutilizando el patrón de sondas y
-   evidencia de los hitos 0-4.
+1. Completar la validación física del Hito 5: instalar `azahar_vita_render_probe.vpk` (normal y de
+   fallo forzado) en una Vita real, confirmar las siete firmas de grupo y las capturas PPM contra la
+   referencia de escritorio, y retener la evidencia siguiendo el procedimiento de
+   `vita/README.md`. El software ya está completo y validado contra la referencia de escritorio y la
+   compilación cruzada para ARMv7; solo falta esta comprobación en hardware para cerrar el hito.
 2. Evaluar, como trabajo posterior no bloqueante, enrutar las propias reservas del corpus de
    pruebas del Hito 4 a través de un asignador respaldado por `sceKernelAllocMemBlock` (en vez de
    heap) para que la reducción de heap medida se acerque a la que un sistema de producción real

@@ -368,6 +368,77 @@ reference, and `user_free` stable at 91,226,112 bytes before and after the corpu
 validation was completed on 2026-09-12; the retained evidence in `build-vita/evidence/hito-4/` is
 the canonical record.
 
+## Hito 5: software renderer
+
+The sixth VPK links Azahar's real software renderer - `Pica::PicaCore`, `SwRenderer::
+RasterizerSoftware`/`RendererSoftware`/`SwBlitter`, the PICA shader interpreter - through a new
+`VideoCore::RendererEnvironment` seam (`src/video_core/renderer_environment.h`, mirroring `Core::
+MemoryEnvironment` and `Core::DynComEnvironment`), rather than reimplementing any part of the
+rendering pipeline for the probe. Its seven-group corpus (`renderer_init`, `color_fill`,
+`framebuffer_formats`, `transfer_engine`, `triangle_raster`, `textured_quad`, `guest_frame`) builds
+real PICA command lists and runs them through `Pica::PicaCore::ProcessCmdList`; `guest_frame` loads
+a synthetic 3DSX homebrew through the real loader/memory/kernel stack (as Hito 3 does) and lets its
+own ARM11 code submit a command list through one new probe SVC before exiting, then presents the
+result and writes it to two binary PPM captures for physical comparison against the desktop
+reference. See `docs/vita-port.md`'s "Milestone 5 closure" for the full design, including the two
+ARMv7-portability fixes cross-compiling this milestone required in upstream `video_core` code.
+
+Build and run the desktop reference first:
+
+```sh
+cmake -S vita/tests -B build-vita/hito5-host -DCMAKE_BUILD_TYPE=Release
+cmake --build build-vita/hito5-host --parallel
+build-vita/hito5-host/azahar_render_host_probe
+```
+
+This also writes `hito5-top.ppm`/`hito5-bottom.ppm` to `build-vita/hito5-host/` - the reference
+captures the Vita probe's own must match byte for byte.
+
+Build normal and diagnostic Vita variants in separate directories:
+
+```sh
+cmake -S vita -B build-vita/hito5-cmake -DCMAKE_BUILD_TYPE=Release \
+    -DAZAHAR_VITA_BUILD_RENDER_PROBE=ON
+cmake --build build-vita/hito5-cmake --parallel
+
+cmake -S vita -B build-vita/hito5-failure -DCMAKE_BUILD_TYPE=Release \
+    -DAZAHAR_VITA_BUILD_RENDER_PROBE=ON \
+    -DAZAHAR_VITA_RENDER_FORCE_FAILURE=ON
+cmake --build build-vita/hito5-failure --parallel
+
+vita/scripts/validate-hito5.sh build-vita/hito5-cmake \
+    build-vita/hito5-host/azahar_render_host_probe
+```
+
+The VPK uses title ID `AZHV00006`, version `00.01`, and title
+`Azahar Vita Render Probe`.
+
+## Hito 5 physical validation
+
+This validation has not been run yet - the software build is complete and passes on the desktop
+reference and via cross-compilation, but no VPK from this milestone has been installed on a Vita.
+The procedure, once hardware is available:
+
+1. Install `build-vita/hito5-failure/azahar_vita_render_probe.vpk`. It must show alternating
+   magenta/black bands, log `FAIL forced_failure code=0xA5000001` and `RESULT FAIL`, then exit after
+   five seconds.
+2. Install `build-vita/hito5-cmake/azahar_vita_render_probe.vpk`. It must show a dark-gray
+   background with the rendered top screen (400x240, flat green from `guest_frame`) and bottom
+   screen (320x240, same flat green via `regs_lcd.color_fill_bottom`) composited onto it - not color
+   bands, unlike every earlier milestone's probe. Give it time before assuming it is unresponsive:
+   the software rasterizer with an interpreted vertex shader is slow on real ARMv7 hardware, and
+   `PASS render_progress group=...` lines in `boot.log` distinguish a slow run from a stuck one, the
+   same lesson Hito 4's physical testing already established.
+3. Launch the normal probe three times. Every run must contain seven `PASS group=` records
+   (`renderer_init`, `color_fill`, `framebuffer_formats`, `transfer_engine`, `triangle_raster`,
+   `textured_quad`, `guest_frame`) with the same signatures as the desktop reference, a `PASS
+   present` record, a `PASS memory` record, and `RESULT PASS groups=7` without any `FAIL` record.
+4. Recover `ux0:data/azahar-vita/boot.log` and `ux0:data/azahar-vita/hito-5/hito5-top.ppm`/
+   `hito5-bottom.ppm`. Their SHA-256 hashes must match the desktop reference's captures exactly -
+   `validate-hito5.sh` prints the reference hashes to compare against.
+5. Retain the forced log, normal log, both recovered PPM captures, desktop output, SDK version,
+   commit, sizes, hashes, and validator output under `build-vita/evidence/hito-5/`.
+
 ## Porting order
 
 1. Compile `citra_common` without networking, desktop dynamic-library loading, or platform-specific

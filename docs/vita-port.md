@@ -93,6 +93,15 @@ matched the desktop reference's signatures exactly across three consecutive laun
 `_newlib_heap_size_user` confirmed in the log. Two design errors surfaced by that same physical
 testing were fixed and reverified before this closure - see "Milestone 4 closure" below.
 
+Milestone 5's software build is complete but not yet physically validated: the seven-group render
+corpus passes identically on the desktop reference (`azahar_render_host_probe`, all seven groups
+`PASS`, `RESULT PASS groups=7`, stable across repeated runs) and the Vita probe cross-compiles
+cleanly for ARMv7 with `vita/scripts/validate-hito5.sh` passing end to end, including the ELF/VPK
+structure, required symbols, translation-cache size, BSS budget, and the forbidden-dependency audit.
+Physical validation on real hardware - the three-launch procedure in "Hito 5" below, comparing the
+recovered `boot.log` and PPM captures against this same desktop reference - has not been run yet;
+see "Milestone 5 physical validation" for what remains.
+
 ## Milestone 4 closure
 
 Milestone 4 turns `Memory::MemorySystem`'s four large backing allocations (FCRAM, VRAM, DSP RAM,
@@ -203,3 +212,76 @@ already fits (`budget_plan`/`renderer_headroom` above) with room to spare, so th
 evaluates the option and explicitly does not adopt it - consistent with the roadmap's
 "sin convertir plugins de kernel en requisito inicial." No kernel plugin, memory-unlock module, or
 `ux0:tai` configuration is part of this or any milestone's requirements.
+
+## Milestone 5 closure
+
+Milestone 5 links Azahar's real software renderer - `Pica::PicaCore`, `SwRenderer::
+RasterizerSoftware`, `SwRenderer::RendererSoftware`, `SwRenderer::SwBlitter`, the PICA shader
+interpreter - into the Vita port for the first time, rather than reimplementing any part of the
+rendering pipeline for the probe. The seam this needed is `VideoCore::RendererEnvironment`
+(`src/video_core/renderer_environment.h`), mirroring `Core::MemoryEnvironment` (Milestone 4) and
+`Core::DynComEnvironment` (Milestone 3): under `AZAHAR_VITA`, `VideoCore::RendererBase` and
+`SwRenderer::RendererSoftware` take a `RendererEnvironment&` instead of a `Core::System&` and a
+`Frontend::EmuWindow&`, so the desktop (non-Vita) code path is unchanged bit for bit. Two additional
+one-line seams were needed to keep `Core::System` out of the link entirely:
+`video_core/debug_utils/debug_utils.cpp`'s single `Core::System::GetInstance()` call (a debug-widget
+cache flush, unreachable on Vita) and `video_core/pica/pica_core.cpp`'s `CommandList::serialize`
+(already a no-op template under `AZAHAR_VITA` per `common/archives.h`'s `SERIALIZE_IMPL`, but the
+qualified name still needed `Core::System` declared to satisfy non-dependent name lookup).
+
+The deterministic corpus (`vita/src/render_corpus.{h,cpp}`) adds seven groups, shared verbatim
+between the desktop reference and the Vita probe exactly like milestones 2-4:
+
+- `renderer_init` - `Memory::MemorySystem`, `Pica::PicaCore` and `SwRenderer::RendererSoftware`
+  constructed over a `RendererEnvironment`, checked against the desktop-inherited screen defaults
+  (`InitializeRegs`'s `nn::gx::Initialize` values).
+- `color_fill` - `regs_lcd.color_fill_top`/`color_fill_bottom`, the same solid-fill mechanism GSP
+  uses for splash screens, checked through a real `SwapBuffers()`.
+- `framebuffer_formats` - all five `Pica::PixelFormat` values round-tripped through
+  `Common::Color::EncodeXXX`/`DecodeXXX` and `RendererSoftware::LoadFBToScreenInfo`'s decode
+  dispatch.
+- `transfer_engine` - `SwRenderer::SwBlitter::MemoryFill` and the display-transfer engine's
+  texture-copy mode (a raw physical-address memcpy, `SwBlitter::TextureCopy`), called directly since
+  no `VideoCore::GPU`/register-MMIO layer is linked (see below).
+- `triangle_raster` - a real, hand-built PICA raw command list (register writes plus immediate-mode
+  vertex submission) run through `Pica::PicaCore::ProcessCmdList`, rendering a flat-shaded
+  full-viewport quad and checking every byte of the render target.
+- `textured_quad` - as `triangle_raster`, sampling a uniformly-filled texture through the texture
+  unit and TEV combiner instead of the interpolated vertex color.
+- `guest_frame` - a synthetic 3DSX homebrew (built the same way Milestone 3's `BuildTestHomebrew` is,
+  but as its own function, `BuildGraphicsHomebrew`, kept separate so this milestone cannot change
+  Milestone 3's own, already-validated corpus) loaded through the real `Loader::Load3DSXImage`,
+  `Memory::MemorySystem` and `Kernel::KernelSystem`, reaching its entry point and submitting the
+  `triangle_raster` command list through one new hand-written SVC (`SvcSubmitGpuCommandList`) before
+  exiting - the "a graphical homebrew produces a recognizable image" acceptance criterion. As a side
+  effect it writes both screens to binary PPM files for physical-validation comparison (see below).
+
+No `VideoCore::GPU` is linked - a guest normally reaches the GPU by asking the privileged GSP
+service to write its MMIO registers, and porting GSP HLE is out of scope until a later milestone
+(see "Porting order" below). `guest_frame`'s new SVC is a direct stand-in for that one IPC call,
+documented as such in `render_corpus.cpp`; every other group drives `Pica::PicaCore` directly from
+C++, which is the same thing `VideoCore::GPU::WriteReg`'s trigger handling (`MemoryFill`,
+`MemoryTransfer`, `SubmitCmdList`) would do, just without the MMIO address decoding step this port
+has no register bus for. `guest_frame` also does not re-issue a display transfer to present its
+frame: it points the LCD framebuffer directly at the render target it already wrote (both RGBA8, same
+physical address) rather than repeating the `transfer_engine` group's own, separately-validated copy.
+
+Two upstream `video_core` issues surfaced only by cross-compiling for ARMv7 (never previously
+exercised by any Vita milestone) needed fixing, both real fixes rather than Vita-only workarounds:
+
+- `video_core/pica/regs_shader.h`'s `ShaderMode` (and other plain, unscoped register enums) have no
+  fixed underlying type. ARM EABI's default is to size such an enum to the smallest type that fits
+  its values (one byte here), while the x86-64 desktop reference sizes it as `int` - a mismatch that
+  fails `Common::BitField`'s own `static_assert(bits + position <= 8 * sizeof(T))` the instant such
+  an enum is used as a `BitField`'s value type. `vita/CMakeLists.txt`'s `citra_render_probe` target
+  now passes `-fno-short-enums`, matching the desktop reference's enum sizing exactly.
+- `video_core/pica/shader_setup.cpp`'s `ProcessBlockNEON` used `vmaxvq_u32`, an AArch64-only
+  horizontal-reduction NEON intrinsic, under a guard (`defined(__ARM_NEON)`) that also matches ARMv7
+  NEON (the Vita's Cortex-A9). Narrowed to `defined(__aarch64__)`; ARMv7 now falls through to the
+  existing portable scalar loop in `UpdateProgramCodeRange`/`UpdateSwizzleDataRange`, correct either
+  way, just unoptimized on this one path.
+
+Signature rules are unchanged from milestones 2-4: nothing host-dependent (`sizeof(void*)`,
+`TRANS_CACHE_SIZE`, thread-worker count, live memory readings) is folded into a group's signature.
+The PPM captures are the one new form of evidence this milestone adds - their SHA-256 hashes, not
+just the corpus signatures, must match between the desktop reference and the recovered Vita output.
